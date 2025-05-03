@@ -2,13 +2,11 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+from .config_sidebar import sidebar_config
 
 # === DYNAMIC PATH FIX FOR IMPORTING LOCAL MODULES ===
 APP_DIR = os.path.dirname(__file__)
 sys.path.append(APP_DIR)
-
-# === LOCAL IMPORTS ===
-from config_sidebar import sidebar_config
 
 # === STREAMLIT PAGE CONFIG ===
 st.set_page_config(page_title="📊 Portfolio Optimizer Pro", layout="wide")
