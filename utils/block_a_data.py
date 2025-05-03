@@ -1,18 +1,19 @@
-from vnstock import stock_historical_data
 import pandas as pd
 import streamlit as st
 from itertools import combinations
+from vnstock import Vnstock
 
 def load_data(tickers, benchmark_symbol, start_date, end_date):
     all_symbols = tickers + [benchmark_symbol]
     data_all = []
-
     st.subheader("Block A – Data Loading and Monthly Return Computation")
     st.info(f"Loading data for {len(all_symbols)} tickers...")
 
+    api = Vnstock()
+
     for symbol in all_symbols:
         try:
-            df = stock_historical_data(
+            df = api.stock_historical_data(
                 symbol=symbol,
                 start_date=start_date.strftime('%Y-%m-%d'),
                 end_date=end_date.strftime('%Y-%m-%d'),
@@ -35,9 +36,6 @@ def load_data(tickers, benchmark_symbol, start_date, end_date):
 
 
 def compute_monthly_return(df):
-    if 'Ticker' not in df.columns or 'time' not in df.columns or 'close' not in df.columns:
-        raise KeyError("Missing required columns: 'Ticker', 'time', 'close'")
-
     df = df.sort_values(['Ticker', 'time']).copy()
     df.set_index('time', inplace=True)
 
@@ -68,7 +66,6 @@ def compute_benchmark_return(df, benchmark_symbol):
 
 def run(tickers, benchmark_symbol, start_date, end_date):
     df_all = load_data(tickers, benchmark_symbol, start_date, end_date)
-
     data_stocks = df_all[df_all['Ticker'].isin(tickers)].copy()
     data_benchmark = df_all[df_all['Ticker'] == benchmark_symbol].copy()
 
