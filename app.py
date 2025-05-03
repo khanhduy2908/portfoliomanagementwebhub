@@ -16,11 +16,10 @@ from utils import (
     block_j_stress_testing,
 )
 
-# --- Streamlit Settings ---
+# --- Sidebar Inputs ---
 st.set_page_config(page_title="Institutional Portfolio Optimization", layout="wide")
 st.title("Institutional Portfolio Optimization Platform")
 
-# --- Sidebar Inputs ---
 st.sidebar.header("User Configuration")
 tickers_input = st.sidebar.text_input("Stock Tickers (comma-separated)", value="VNM,FPT,MWG,VCB,REE")
 tickers_user = [x.strip().upper() for x in tickers_input.split(",") if x.strip()]
@@ -35,7 +34,7 @@ A_user = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_val
 
 run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
-# --- Overwrite Global Config ---
+# --- Overwrite Config ---
 config.tickers = tickers_user
 config.benchmark_symbol = benchmark_user
 config.start_date = pd.to_datetime(start_user)
@@ -45,60 +44,77 @@ config.rf = rf_user / 12
 config.total_capital = capital_user
 config.A = A_user
 
-# --- Run Analysis Pipeline ---
+# --- Run Analysis ---
 if run_analysis:
-    with st.spinner("Executing pipeline. Please wait..."):
-
-        # BLOCK A
-        data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
+    with st.spinner("Running full analysis pipeline..."):
+        # Block A
+        df_all, tickers_ok, benchmark_ok, failed_symbols = block_a_data.load_data(
             config.tickers, config.benchmark_symbol, config.start_date, config.end_date
         )
 
-        # BLOCK B
+        if not tickers_ok or benchmark_ok is None:
+            st.error(f"Cannot proceed. Failed to retrieve data for: {', '.join(failed_symbols)}")
+            st.stop()
+
+        data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
+            df_all, tickers_ok, benchmark_ok
+        )
+        st.success("Block A completed.")
+
+        # Block B
         selected_tickers, selected_combinations, latest_data = block_b_factor.run(
             data_stocks, returns_benchmark
         )
+        st.success("Block B completed.")
 
-        # BLOCK C
+        # Block C
         cov_matrix_dict = block_c_covariance.run(
             selected_combinations, returns_pivot_stocks
         )
+        st.success("Block C completed.")
 
-        # BLOCK D
+        # Block D
         adj_returns_combinations, model_store, features_df = block_d_forecast.run(
             data_stocks, selected_tickers, selected_combinations
         )
+        st.success("Block D completed.")
 
-        # BLOCK E
+        # Block E
         valid_combinations = block_e_feasibility.run(
             adj_returns_combinations, cov_matrix_dict
         )
+        st.success("Block E completed.")
 
-        # BLOCK F
+        # Block F
         walkforward_df, error_by_stock = block_f_backtest.run(
             valid_combinations, features_df
         )
+        st.success("Block F completed.")
 
-        # BLOCK G
+        # Block G
         hrp_cvar_results = block_g_optimization.run(
             valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark
         )
+        st.success("Block G completed.")
 
-        # BLOCK H
+        # Block H
         best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio = block_h_complete_portfolio.run(
             hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, config.rf, config.A, config.total_capital
         )
+        st.success("Block H completed.")
 
-        # BLOCK I
+        # Block I
         block_i_performance_analysis.run(
             best_portfolio, returns_pivot_stocks, returns_benchmark,
             config.rf, config.A, config.total_capital, data_stocks, data_benchmark, config.benchmark_symbol,
             weights, tickers_portfolio, config.start_date, config.end_date
         )
+        st.success("Block I completed.")
 
-        # BLOCK J
+        # Block J
         block_j_stress_testing.run(
             best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
         )
+        st.success("Block J completed.")
 
-    st.success("All blocks executed successfully.")
+    st.success("Full analysis pipeline completed successfully.")
