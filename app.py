@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from vnstock import stock_listing
+from vnstock import listing_companies
 
 from utils import (
     data_loader, factor_ranking, return_forecast, covariance_estimation,
@@ -12,21 +12,19 @@ import config
 # --- Page Setup ---
 st.set_page_config(page_title="📊 Portfolio Optimizer Pro", layout="wide")
 
-# --- Load list of Vietnamese stock tickers from all exchanges ---
+# --- Load Vietnamese Stock Tickers ---
 try:
-    df_listing = stock_listing(exchange="ALL")
+    df_listing = listing_companies()
     tickers_all = sorted(df_listing['ticker'].dropna().unique().tolist())
 except Exception as e:
-    st.error(f"❌ Failed to fetch stock listings: {e}")
+    st.error(f"❌ Failed to load tickers from Vnstock: {e}")
     tickers_all = ["VNM", "FPT", "MWG", "VCB", "REE"]
-benchmark_default = "VNINDEX" if "VNINDEX" in tickers_all else tickers_all[0]
 
 # --- Sidebar Configuration ---
 st.sidebar.title("⚙️ Portfolio Configuration")
 
-tickers = st.sidebar.multiselect("Select Stock Tickers", options=tickers_all, default=["VNM", "FPT", "MWG"])
-benchmark_symbol = st.sidebar.selectbox("Benchmark Symbol", options=tickers_all, index=tickers_all.index(benchmark_default))
-
+tickers = st.sidebar.multiselect("Select Stock Tickers", options=tickers_all, default=["VNM", "FPT", "MWG", "VCB", "REE"])
+benchmark_symbol = st.sidebar.selectbox("Benchmark Symbol", options=tickers_all, index=tickers_all.index("VNINDEX") if "VNINDEX" in tickers_all else 0)
 start_date = st.sidebar.date_input("Start Date", value=pd.to_datetime("2020-01-01"))
 end_date = st.sidebar.date_input("End Date", value=pd.to_datetime("today"))
 
@@ -39,7 +37,6 @@ run_analysis = st.sidebar.button("🚀 Run Portfolio Optimization")
 
 # --- Main App Pipeline ---
 if run_analysis:
-
     st.markdown("## 🔄 Running Portfolio Optimization Pipeline...")
 
     try:
@@ -78,7 +75,6 @@ if run_analysis:
         )
 
         # --- Block F ---
-        st.markdown("### 🔄 Walkforward Evaluation")
         walkforward_df, best_combo, best_weights, error_by_stock = return_forecast.walkforward_evaluation(
             valid_combinations, features_df
         )
@@ -112,8 +108,7 @@ if run_analysis:
         st.pyplot(fig_stress)
         st.dataframe(summary_stress.round(2), use_container_width=True)
 
-        # --- Final Note ---
-        st.success("🎉 Optimization Complete! See results above.")
-    
+        st.success("🎉 Portfolio Optimization Completed Successfully!")
+
     except Exception as e:
         st.error(f"❌ Error during execution: {e}")
