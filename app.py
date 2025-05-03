@@ -3,6 +3,8 @@ import pandas as pd
 import sys
 import os
 from .config_sidebar import sidebar_config
+from portfolio_app.config_sidebar import sidebar_config
+from portfolio_app.utils import block_a_data, block_b_factor
 
 # === DYNAMIC PATH FIX FOR IMPORTING LOCAL MODULES ===
 APP_DIR = os.path.dirname(__file__)
