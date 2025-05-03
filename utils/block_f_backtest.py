@@ -1,110 +1,62 @@
-import numpy as np
-import pandas as pd
-from collections import defaultdict
-from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.preprocessing import StandardScaler
-from pytorch_tabnet.tab_model import TabNetRegressor
-import joblib
+def run(tickers, returns_pivot_stocks, window_size=12, rf=0.0075):
+    import numpy as np
+    import pandas as pd
+    from scipy.optimize import minimize
+    import matplotlib.pyplot as plt
 
-def run_block_f(features_df, valid_combinations, feature_cols, lookback=12, min_samples=100, n_splits=5):
-    eval_logs = []
-    error_by_stock = defaultdict(list)
-    walkforward_results = []
+    def max_sharpe(weights, mean_returns, cov_matrix, rf):
+        port_return = np.dot(weights, mean_returns)
+        port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+        sharpe = (port_return - rf*100) / port_vol
+        return -sharpe  # Maximize Sharpe
 
-    for combo in valid_combinations:
-        subset = combo.split('-')
-        df_combo = features_df[features_df['Ticker'].isin(subset)].copy()
+    returns_df = returns_pivot_stocks[tickers].dropna()
+    all_dates = returns_df.index
+    results = []
 
-        X_all, y_all, meta = [], [], []
-        for ticker in subset:
-            df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
-            for i in range(lookback, len(df_ticker)):
-                window = df_ticker[feature_cols].iloc[i - lookback:i].values.flatten()
-                target = df_ticker['Return_Close'].iloc[i]
-                ts = df_ticker['time'].iloc[i]
-                X_all.append(window)
-                y_all.append(target)
-                meta.append({'time': ts, 'ticker': ticker})
+    for i in range(window_size, len(all_dates)):
+        train_window = returns_df.iloc[i - window_size:i]
+        test_month = returns_df.iloc[i]
 
-        X_all = np.array(X_all)
-        y_all = np.array(y_all)
-        meta_df = pd.DataFrame(meta)
+        mean_ret = train_window.mean()
+        cov = train_window.cov()
 
-        if len(X_all) < min_samples:
-            print(f"⚠️ {combo}: Not enough samples ({len(X_all)}). Skipping.")
-            continue
+        x0 = np.ones(len(tickers)) / len(tickers)
+        bounds = [(0, 1) for _ in range(len(tickers))]
+        constraints = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_all)
+        opt = minimize(max_sharpe, x0, args=(mean_ret, cov, rf), method='SLSQP',
+                       bounds=bounds, constraints=constraints)
 
-        split_size = int(len(X_scaled) / (n_splits + 1))
-        maes, r2s, accs, dir_accs = [], [], [], []
-        preds_all, y_all_vals, tickers_all = [], [], []
+        if opt.success:
+            weights = opt.x
+            realized_return = np.dot(weights, test_month)
+            results.append({
+                'Date': all_dates[i],
+                'Return': realized_return,
+                'Volatility': np.sqrt(np.dot(weights.T, np.dot(cov, weights))),
+                'Sharpe': (realized_return - rf*100) / np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
+            })
 
-        for i in range(n_splits):
-            train_end = (i + 1) * split_size
-            test_end = train_end + split_size
+    backtest_df = pd.DataFrame(results).set_index('Date')
 
-            X_train = X_scaled[:train_end]
-            y_train = y_all[:train_end].reshape(-1, 1)
-            X_test = X_scaled[train_end:test_end]
-            y_test = y_all[train_end:test_end].reshape(-1, 1)
-            test_meta = meta_df.iloc[train_end:test_end]
+    # Plot
+    cum_return = (1 + backtest_df['Return'] / 100).cumprod()
+    drawdown = cum_return / cum_return.cummax() - 1
 
-            if len(X_test) == 0:
-                continue
+    plt.figure(figsize=(12, 5))
+    plt.plot(cum_return.index, cum_return, label='Walkforward Portfolio')
+    plt.title("Walkforward Cumulative Return")
+    plt.legend()
+    plt.tight_layout()
+    plt.grid(False)
+    plt.show()
 
-            model = TabNetRegressor(seed=42)
-            model.fit(
-                X_train=X_train, y_train=y_train,
-                eval_set=[(X_test, y_test)],
-                eval_metric=['mae'],
-                max_epochs=100, patience=10,
-                batch_size=256, virtual_batch_size=128
-            )
+    plt.figure(figsize=(12, 3))
+    plt.fill_between(drawdown.index, drawdown, color='red', alpha=0.3)
+    plt.title("Walkforward Drawdown")
+    plt.tight_layout()
+    plt.grid(False)
+    plt.show()
 
-            preds = model.predict(X_test).squeeze()
-            y_true = y_test.squeeze()
-
-            mae = mean_absolute_error(y_true, preds)
-            r2 = r2_score(y_true, preds)
-            acc = (np.sign(y_true) == np.sign(preds)).mean()
-            dir_acc = ((preds * y_true) > 0).mean()
-
-            maes.append(mae)
-            r2s.append(r2)
-            accs.append(acc)
-            dir_accs.append(dir_acc)
-
-            preds_all.extend(preds)
-            y_all_vals.extend(y_true)
-            tickers_all.extend(test_meta['ticker'].values)
-
-            joblib.dump(model, f"model_{combo}_fold{i}.pkl")
-
-        walkforward_results.append({
-            'Portfolio': combo,
-            'MAE': np.mean(maes),
-            'R2': np.mean(r2s),
-            'Accuracy': np.mean(accs),
-            'Directional Accuracy': np.mean(dir_accs)
-        })
-
-        error_df = pd.DataFrame({
-            'Ticker': tickers_all,
-            'True': y_all_vals,
-            'Pred': preds_all
-        })
-        error_df['Error'] = np.abs(error_df['True'] - error_df['Pred'])
-        stock_error = error_df.groupby('Ticker')['Error'].mean().sort_values(ascending=False)
-        error_by_stock[combo] = stock_error
-
-    walkforward_df = pd.DataFrame(walkforward_results).sort_values('MAE')
-    print("\n📈 Walkforward Evaluation Summary:")
-    print(walkforward_df.round(4))
-
-    best_combo = walkforward_df.iloc[0]['Portfolio']
-    print(f"\n🧾 Stock-level errors for best portfolio: {best_combo}")
-    print(error_by_stock[best_combo].round(4))
-
-    return walkforward_df, error_by_stock
+    return backtest_df.round(4)
