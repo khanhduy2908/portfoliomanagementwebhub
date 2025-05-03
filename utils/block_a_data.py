@@ -52,3 +52,14 @@ def compute_benchmark_return(df, benchmark_symbol):
     df_benchmark = df_benchmark['Close'].resample('M').last().pct_change().dropna()
     df_benchmark = df_benchmark.to_frame(name='Benchmark_Return')
     return df_benchmark
+
+def run(tickers, benchmark_symbol, start_date, end_date):
+    from itertools import combinations
+
+    df_all = load_data(tickers, benchmark_symbol, start_date, end_date)
+    data_stocks = df_all[df_all['Ticker'].isin(tickers)].copy()
+    data_benchmark = df_all[df_all['Ticker'] == benchmark_symbol].copy()
+    returns_pivot_stocks = compute_monthly_return(data_stocks)
+    returns_benchmark = compute_benchmark_return(df_all, benchmark_symbol)
+    portfolio_combinations = list(combinations(tickers, 3))
+    return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations
