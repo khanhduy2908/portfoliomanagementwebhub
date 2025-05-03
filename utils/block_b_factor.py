@@ -1,48 +1,46 @@
-import pandas as pd
-import numpy as np
-import warnings
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-import optuna
-from itertools import combinations
-import matplotlib.pyplot as plt
-import seaborn as sns
+def run(data_stocks, returns_benchmark):
+    import pandas as pd
+    import numpy as np
+    from sklearn.linear_model import LinearRegression
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.cluster import KMeans
+    import optuna
+    import warnings
 
-def compute_factors(data_stocks, returns_benchmark):
-    factor_data = []
+    def compute_factors(data_stocks, returns_benchmark):
+        factor_data = []
+        for ticker in data_stocks['Ticker'].unique():
+            df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
+            if df.shape[0] < 6:
+                continue
+            df['Return'] = df['Close'].pct_change() * 100
+            df['Volatility'] = df['Close'].rolling(window=3).std()
+            df['Liquidity'] = df['Volume'].rolling(window=3).mean()
+            df['Momentum'] = df['Close'].pct_change(periods=3) * 100
+            df.dropna(inplace=True)
 
-    for ticker in data_stocks['Ticker'].unique():
-        df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
-        if df.shape[0] < 6:
-            warnings.warn(f"{ticker}: Không đủ dữ liệu.")
-            continue
+            merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
+                              left_on='time', right_index=True, how='inner')
 
-        df['Return'] = df['Close'].pct_change() * 100
-        df['Volatility'] = df['Close'].rolling(window=3).std()
-        df['Liquidity'] = df['Volume'].rolling(window=3).mean()
-        df['Momentum'] = df['Close'].pct_change(periods=3) * 100
-        df.dropna(inplace=True)
+            if len(merged) < 10:
+                continue
 
-        merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
-                          left_on='time', right_index=True, how='inner')
+            X = merged[['Benchmark_Return']]
+            y = merged['Return']
+            model = LinearRegression().fit(X, y)
+            beta = model.coef_[0]
+            df = df[df['time'].isin(merged['time'])]
+            df['Beta'] = beta
+            factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
 
-        if len(merged) < 10:
-            warnings.warn(f"{ticker}: Không đủ dữ liệu để tính beta.")
-            continue
+        return pd.concat(factor_data, ignore_index=True)
 
-        X = merged[['Benchmark_Return']]
-        y = merged['Return']
-        model = LinearRegression().fit(X, y)
-        beta = model.coef_[0]
-        df = df[df['time'].isin(merged['time'])]
-        df['Beta'] = beta
-        factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
+    ranking_df = compute_factors(data_stocks, returns_benchmark)
+    latest_month = ranking_df['time'].max()
+    latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
 
-    return pd.concat(factor_data, ignore_index=True)
-
-def optimize_factors(latest_data, factor_cols):
     scaler = StandardScaler()
+    factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
     scaled_values = scaler.fit_transform(latest_data[factor_cols])
     scaled_df = pd.DataFrame(scaled_values, columns=[f + '_S' for f in factor_cols])
     latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
@@ -70,7 +68,6 @@ def optimize_factors(latest_data, factor_cols):
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=50)
-
     w_opt = study.best_params
     w_arr = np.array(list(w_opt.values()))
     w_arr /= w_arr.sum()
@@ -84,31 +81,18 @@ def optimize_factors(latest_data, factor_cols):
     )
     latest_data['Rank'] = latest_data['Score'].rank(ascending=False)
 
-    return latest_data, w_opt
-
-def select_top_stocks(latest_data, factor_cols, n_clusters=3, top_n_per_cluster=2, top_n_final=5):
     features_for_cluster = [f + '_S' for f in factor_cols]
-    kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
+    kmeans = KMeans(n_clusters=3, n_init=10, random_state=42)
     latest_data['Cluster'] = kmeans.fit_predict(latest_data[features_for_cluster])
 
     selected_df = (
         latest_data.sort_values('Score', ascending=False)
         .groupby('Cluster')
-        .head(top_n_per_cluster)
+        .head(2)
         .sort_values('Rank')
-        .head(top_n_final)
+        .head(5)
         .reset_index(drop=True)
     )
-    return selected_df
-
-def run_block_b(data_stocks, returns_benchmark):
-    factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
-    ranking_df = compute_factors(data_stocks, returns_benchmark)
-    latest_month = ranking_df['time'].max()
-    latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
-    optimized_df, weights_opt = optimize_factors(latest_data, factor_cols)
-    selected_df = select_top_stocks(optimized_df, factor_cols)
     selected_tickers = selected_df['Ticker'].tolist()
-    selected_combinations = ['-'.join(c) for c in combinations(selected_tickers, 3)]
 
-    return selected_df, selected_tickers, selected_combinations, optimized_df
+    return selected_df, selected_tickers
