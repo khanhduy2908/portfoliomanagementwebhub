@@ -49,12 +49,20 @@ def load_data(tickers, benchmark_symbol, start_date, end_date):
     data_stocks = load_all_monthly_data(tickers, start_date, end_date)
     data_benchmark = load_all_monthly_data([benchmark_symbol], start_date, end_date)
 
+    if data_stocks.empty:
+        raise ValueError("❌ Không có dữ liệu cổ phiếu nào được tải thành công.")
+    if data_benchmark.empty:
+        raise ValueError("❌ Không có dữ liệu benchmark được tải thành công.")
+
+    # Tính toán lợi suất
     returns_stocks = compute_monthly_return(data_stocks)
     returns_benchmark = compute_monthly_return(data_benchmark)
     returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
 
+    # Kết hợp lợi suất cổ phiếu với benchmark
     returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
 
+    # Pivot lợi suất để phục vụ các block sau
     returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
     returns_benchmark.set_index('time', inplace=True)
 
