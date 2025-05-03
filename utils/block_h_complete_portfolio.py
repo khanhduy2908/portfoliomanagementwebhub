@@ -1,44 +1,90 @@
-def run(hrp_df, total_capital, rf_monthly, A):
+def run_block_h(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
+                rf, A, total_capital, benchmark_return_mean):
     import numpy as np
     import pandas as pd
+    import matplotlib.pyplot as plt
+    import cvxpy as cp
+                    
+    best_portfolio = max(hrp_cvar_results, key=lambda x: x['Sharpe Ratio']) if hrp_cvar_results else None
+    if not best_portfolio:
+        print("❌ No valid portfolio.")
+        return
+    
+    tickers = list(best_portfolio['Weights'].keys())
+    weights_hrp = np.array(list(best_portfolio['Weights'].values()))
+    mu = np.array([adj_returns_combinations[best_portfolio['Portfolio']][t] for t in tickers]) / 100
+    cov = cov_matrix_dict[best_portfolio['Portfolio']].loc[tickers, tickers].values
 
-    if hrp_df.empty:
-        return None, None, None, None, None, None
+    mu_p = float(mu @ weights_hrp)
+    sigma_p = np.sqrt(weights_hrp.T @ cov @ weights_hrp)
 
-    # Chọn danh mục tốt nhất dựa trên Sharpe
-    best_portfolio = hrp_df.iloc[0]
-    weights = best_portfolio['Weights']
-    mu = best_portfolio['Expected Return (%)'] / 100
-    sigma = best_portfolio['Volatility (%)'] / 100
+    y_opt = (mu_p - rf) / (A * sigma_p ** 2)
+    y_capped = max(0.6, min(y_opt, 0.9))
 
-    # 1. Tính tỷ trọng đầu tư vào danh mục rủi ro (y*)
-    y_opt = (mu - rf_monthly) / (A * sigma**2)
-    y_capped = max(0, min(y_opt, 1))
+    expected_rc = y_capped * mu_p + (1 - y_capped) * rf
+    sigma_c = y_capped * sigma_p
+    utility = expected_rc - 0.5 * A * sigma_c ** 2
 
-    # 2. Hàm tiện ích
-    utility = mu - 0.5 * A * sigma**2
-
-    # 3. Phân bổ vốn
     capital_risky = y_capped * total_capital
     capital_rf = total_capital - capital_risky
-
-    capital_stocks = {stock: round(w * capital_risky) for stock, w in weights.items()}
-    capital_rf = round(capital_rf)
-
-    return {
-        'best_portfolio': best_portfolio['Portfolio'],
-        'weights': weights,
-        'expected_return': round(mu * 100, 2),
-        'volatility': round(sigma * 100, 2),
-        'sharpe': round(best_portfolio['Sharpe Ratio'], 3),
-        'cvar': round(best_portfolio['CVaR (%)'], 2),
-        'capital_allocation': {
-            'Risk-Free': capital_rf,
-            **capital_stocks
-        },
-        'capital_risky': capital_risky,
-        'capital_rf': capital_rf,
-        'y_opt': y_opt,
-        'y_capped': y_capped,
-        'utility': round(utility, 4)
+    capital_alloc = {t: round(capital_risky * w) for t, w in zip(tickers, weights_hrp)}
+    
+    # --- 1. Bảng thông tin hiệu suất và phân bổ vốn ---
+    summary_info = {
+        "Risk Aversion (A)": A,
+        "Expected Return (E_rc)": round(expected_rc, 4),
+        "Portfolio Risk (σ_c)": round(sigma_c * 100, 4),
+        "Utility (U)": round(utility, 4),
+        "Capital (Risk-Free)": round(capital_rf),
+        "Capital (Risky)": round(capital_risky)
     }
+    summary_df = pd.DataFrame(summary_info.items(), columns=["Metric", "Value"])
+    print("\n📊 Portfolio Summary:")
+    print(summary_df.to_string(index=False))
+
+    print("\n💰 Capital Allocation Breakdown:")
+    for t, v in capital_alloc.items():
+        print(f"   • {t}: {v:,.0f} VND")
+
+    # --- 2. Pie Chart ---
+    labels = ['Risk-Free Asset'] + tickers
+    sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
+    if np.any(np.array(sizes) < 0):
+        print("⚠️ Cannot plot negative allocations.")
+    else:
+        plt.figure(figsize=(8, 6))
+        plt.pie(sizes, labels=labels, autopct='%1.1f%%',
+                startangle=90, shadow=False, textprops={'fontsize': 12})
+        plt.title("Optimal Complete Portfolio Allocation", fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+    # --- 3. Bar Chart So sánh với Benchmark ---
+    hrp_result_dict = {p['Portfolio']: p for p in hrp_cvar_results}
+    top_n = 5
+    top_portfolios = sorted(hrp_result_dict.items(), key=lambda x: x[1]['Sharpe Ratio'], reverse=True)[:top_n]
+    
+    combos = [x[0] for x in top_portfolios]
+    returns = [x[1]['Expected Return (%)'] for x in top_portfolios]
+    vols = [x[1]['Volatility (%)'] for x in top_portfolios]
+    cvars = [x[1]['CVaR (%)'] for x in top_portfolios]
+
+    x = np.arange(len(combos))
+    width = 0.25
+
+    plt.figure(figsize=(12, 6))
+    plt.bar(x - width, returns, width, label='Return (%)', color='#1f77b4')
+    plt.bar(x, vols, width, label='Volatility (%)', color='#ff7f0e')
+    plt.bar(x + width, cvars, width, label='CVaR (%)', color='#d62728')
+    plt.axhline(benchmark_return_mean * 100, color='green', linestyle='--', linewidth=2,
+                label=f"VNINDEX Return ({benchmark_return_mean*100:.2f}%)")
+
+    plt.xticks(x, combos, rotation=45)
+    plt.ylabel("Percentage (%)")
+    plt.title("Performance Comparison: HRP Portfolios vs VNINDEX")
+    plt.legend()
+    plt.grid(False)
+    plt.tight_layout()
+    plt.show()
+
+    return summary_df, capital_alloc
