@@ -17,6 +17,7 @@ from utils import (
 )
 
 # --- Sidebar Inputs ---
+st.set_page_config(page_title="Institutional Portfolio Optimization", layout="wide")
 st.title("Institutional Portfolio Optimization Platform")
 
 st.sidebar.header("User Configuration")
@@ -46,46 +47,66 @@ config.A = A_user
 # --- Run Analysis ---
 if run_analysis:
     with st.spinner("Running full analysis pipeline..."):
+        # Block A
         data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
             config.tickers, config.benchmark_symbol, config.start_date, config.end_date
         )
+        st.success("Block A: Data loaded.")
 
+        # Block B
         selected_tickers, selected_combinations, latest_data = block_b_factor.run(
             data_stocks, returns_benchmark
         )
+        st.success("Block B: Factor-based filtering completed.")
 
+        # Block C
         cov_matrix_dict = block_c_covariance.run(
             selected_combinations, returns_pivot_stocks
         )
+        st.success("Block C: Covariance estimation complete.")
 
+        # Block D
         adj_returns_combinations, model_store, features_df = block_d_forecast.run(
             data_stocks, selected_tickers, selected_combinations
         )
+        st.success("Block D: Return prediction completed.")
 
+        # Block E
         valid_combinations = block_e_feasibility.run(
             adj_returns_combinations, cov_matrix_dict
         )
+        st.success("Block E: Feasibility filtering done.")
 
+        # Block F
         walkforward_df, error_by_stock = block_f_backtest.run(
             valid_combinations, features_df
         )
+        st.success("Block F: Walk-forward validation complete.")
 
+        # Block G
         hrp_cvar_results = block_g_optimization.run(
             valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark
         )
+        st.success("Block G: Optimization with CVaR complete.")
 
+        # Block H
         best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio = block_h_complete_portfolio.run(
             hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, config.rf, config.A, config.total_capital
         )
+        st.success("Block H: Complete portfolio constructed.")
 
+        # Block I
         block_i_performance_analysis.run(
             best_portfolio, returns_pivot_stocks, returns_benchmark,
             config.rf, config.A, config.total_capital, data_stocks, data_benchmark, config.benchmark_symbol,
             weights, tickers_portfolio, config.start_date, config.end_date
         )
+        st.success("Block I: Performance analysis and reporting complete.")
 
+        # Block J
         block_j_stress_testing.run(
             best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
         )
+        st.success("Block J: Stress testing completed.")
 
-    st.success("Analysis completed successfully.")
+    st.success("Analysis pipeline completed successfully.")
