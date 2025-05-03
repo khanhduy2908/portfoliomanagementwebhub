@@ -6,6 +6,7 @@ from utils import (
     portfolio_optimizer, complete_allocation, performance_eval, stress_test
 )
 import config
+from itertools import combinations
 
 # --- Page Setup ---
 st.set_page_config(page_title="📊 Portfolio Optimizer Pro", layout="wide")
