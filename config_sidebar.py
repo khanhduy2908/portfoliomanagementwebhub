@@ -1,5 +1,5 @@
 import streamlit as st
-from portfolio_app.config import (
+from .config import (
     DEFAULT_TICKERS,
     DEFAULT_BENCHMARK,
     DEFAULT_START_DATE,
