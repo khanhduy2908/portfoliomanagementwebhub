@@ -104,7 +104,6 @@ def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
         .reset_index(drop=True)
     )
 
-    # ✅ Return compatible outputs for app.py
     selected_tickers = selected_df['Ticker'].tolist()
     selected_combinations = list(combinations(selected_tickers, 3))
     
