@@ -1,18 +1,19 @@
+import pandas as pd
+import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import optuna
-import numpy as np
-import pandas as pd
 import warnings
 from itertools import combinations
 
-# --- 1. Tính các yếu tố cơ bản (Factor Construction) ---
+# --- Tính toán các yếu tố định lượng cơ bản ---
 def compute_factors(data_stocks, returns_benchmark):
     factor_data = []
 
     for ticker in data_stocks['Ticker'].unique():
-        df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
+        df = data_stocks[data_stocks['Ticker'] == ticker].copy()
+        df = df.sort_values('time')
         if df.shape[0] < 6:
             warnings.warn(f"{ticker}: Không đủ dữ liệu.")
             continue
@@ -23,9 +24,9 @@ def compute_factors(data_stocks, returns_benchmark):
         df['Momentum'] = df['Close'].pct_change(periods=3) * 100
         df.dropna(inplace=True)
 
+        # Tính beta dựa trên benchmark
         merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
                           left_on='time', right_index=True, how='inner')
-
         if len(merged) < 10:
             warnings.warn(f"{ticker}: Không đủ dữ liệu để tính beta.")
             continue
@@ -36,11 +37,12 @@ def compute_factors(data_stocks, returns_benchmark):
         beta = model.coef_[0]
         df = df[df['time'].isin(merged['time'])]
         df['Beta'] = beta
+
         factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
 
     return pd.concat(factor_data, ignore_index=True)
 
-# --- Hàm chính để xếp hạng cổ phiếu ---
+# --- Xếp hạng cổ phiếu theo đa yếu tố ---
 def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
     ranking_df = compute_factors(data_stocks, returns_benchmark)
     latest_month = ranking_df['time'].max()
@@ -48,8 +50,8 @@ def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
 
     scaler = StandardScaler()
     factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
-    scaled_values = scaler.fit_transform(latest_data[factor_cols])
-    scaled_df = pd.DataFrame(scaled_values, columns=[f + '_S' for f in factor_cols])
+    scaled = scaler.fit_transform(latest_data[factor_cols])
+    scaled_df = pd.DataFrame(scaled, columns=[f + '_S' for f in factor_cols])
     latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
 
     def objective(trial):
@@ -102,11 +104,8 @@ def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
         .reset_index(drop=True)
     )
 
-    selected_tickers = selected_df['Ticker'].tolist()
-    selected_combinations = ['-'.join(p) for p in list(combinations(selected_tickers, 3))]
+    # Trả về list ticker, combination (str), và dataframe đã xếp hạng
+    selected_tickers = list(selected_df['Ticker'].unique())
+    selected_combinations = ['-'.join(sorted(c)) for c in combinations(selected_tickers, 3)]
 
-    return {
-        'selected_tickers': selected_tickers,
-        'selected_combinations': selected_combinations,
-        'latest_data': latest_data
-    }
+    return selected_tickers, selected_combinations, latest_data
