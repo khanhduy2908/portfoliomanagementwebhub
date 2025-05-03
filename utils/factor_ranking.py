@@ -1,13 +1,12 @@
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
-from itertools import combinations
 import optuna
 import numpy as np
 import pandas as pd
 import warnings
 
-# --- 1. Tính các yếu tố định lượng ---
+# --- 1. Tính các yếu tố cơ bản (Factor Construction) ---
 def compute_factors(data_stocks, returns_benchmark):
     factor_data = []
 
@@ -34,15 +33,13 @@ def compute_factors(data_stocks, returns_benchmark):
         y = merged['Return']
         model = LinearRegression().fit(X, y)
         beta = model.coef_[0]
-
         df = df[df['time'].isin(merged['time'])]
         df['Beta'] = beta
-
         factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
 
     return pd.concat(factor_data, ignore_index=True)
 
-# --- 2. Xếp hạng cổ phiếu & phân cụm ---
+# --- Hàm chính để xếp hạng cổ phiếu ---
 def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
     ranking_df = compute_factors(data_stocks, returns_benchmark)
     latest_month = ranking_df['time'].max()
@@ -104,9 +101,11 @@ def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
         .reset_index(drop=True)
     )
 
-    # --- Trả về dữ liệu đầy đủ cho block tiếp theo ---
     selected_tickers = selected_df['Ticker'].tolist()
-    selected_combinations = list(combinations(selected_tickers, 3))
-    selected_combinations = ['-'.join(p) for p in selected_combinations]
+    selected_combinations = ['-'.join(p) for p in list(combinations(selected_tickers, 3))]
 
-    return selected_tickers, selected_combinations, latest_data
+    return {
+        'selected_tickers': selected_tickers,
+        'selected_combinations': selected_combinations,
+        'latest_data': latest_data
+    }
