@@ -1,65 +1,73 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import warnings
 
-from config import *
-from config_sidebar import sidebar_config
+# Tắt warning
+warnings.filterwarnings("ignore")
 
-# --- LAYOUT CONFIG ---
-st.set_page_config(page_title="📊 Portfolio Optimizer Pro", layout="wide")
+# --- Sidebar Inputs ---
+st.sidebar.header("Portfolio Optimization Inputs")
+tickers = st.sidebar.text_input("Stock Tickers (comma-separated)", value="VNM,FPT,MWG,VCB,REE")
+tickers = [x.strip().upper() for x in tickers.split(",") if x.strip()]
+benchmark_symbol = st.sidebar.text_input("Benchmark Symbol", value="VNINDEX")
+start_date = st.sidebar.date_input("Start Date", value=pd.to_datetime("2020-01-01"))
+end_date = st.sidebar.date_input("End Date", value=pd.to_datetime("today"))
+rf_annual = st.sidebar.number_input("Annual Risk-Free Rate (%)", value=9.0) / 100
+rf = rf_annual / 12
+total_capital = st.sidebar.number_input("Total Capital (VND)", value=750_000_000)
+A = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=10, value=5)
 
-# --- SIDEBAR CONFIG ---
-tickers, benchmark_symbol, start_date, end_date, rf_annual, rf, total_capital, A, run_analysis = sidebar_config()
+run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
-# --- RUN PIPELINE IF USER CLICKS ---
+# --- Start Processing ---
 if run_analysis:
-    with st.spinner("🔄 Running portfolio optimization..."):
-        # --- BLOCK A: Data Loading ---
-        from utils import block_a_data
-        data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(tickers, benchmark_symbol, start_date, end_date)
+    st.title("Institutional-Grade Portfolio Optimization System")
 
-        # --- BLOCK B: Factor Ranking ---
-        from utils import block_b_factor
-        selected_tickers, selected_combinations, latest_data = block_b_factor.run(data_stocks, returns_benchmark)
+    with st.spinner("Running Data Processing and Optimization..."):
 
-        # --- BLOCK C: Covariance Estimation ---
-        from utils import block_c_covariance
-        cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
-
-        # --- BLOCK D: Return Forecasting ---
-        from utils import block_d_forecast
-        adj_returns_combinations, features_df, model_store = block_d_forecast.run(selected_combinations, selected_tickers, data_stocks)
-
-        # --- BLOCK E: Feasibility Check ---
-        from utils import block_e_feasibility
-        valid_combinations = block_e_feasibility.run(adj_returns_combinations, cov_matrix_dict)
-
-        # --- BLOCK F: Walkforward Backtest ---
-        from utils import block_f_backtest
-        walkforward_df, best_combo, error_by_stock = block_f_backtest.run(valid_combinations, features_df)
-
-        # --- BLOCK G: Optimization (HRP + CVaR) ---
-        from utils import block_g_optimization
-        hrp_cvar_results, best_portfolio = block_g_optimization.run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark)
-
-        # --- BLOCK H: Complete Portfolio Construction ---
-        from utils import block_h_complete_portfolio
-        weights, tickers_portfolio, mu_p, sigma_p, y_opt, y_capped, expected_rc, sigma_c, capital_rf, capital_risky = block_h_complete_portfolio.run(
-            best_portfolio, adj_returns_combinations, cov_matrix_dict, total_capital, A, rf
+        # BLOCK A
+        from utils.block_a_data import run_block_a
+        data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = run_block_a(
+            tickers, benchmark_symbol, start_date, end_date
         )
 
-        # --- BLOCK I: Performance Evaluation ---
-        from utils import block_i_performance_analysis
-        block_i_performance_analysis.run(
-            best_portfolio, returns_pivot_stocks, returns_benchmark, weights, tickers_portfolio,
-            start_date, end_date, rf
+        # BLOCK B
+        from utils.block_b_factor import run_block_b
+        selected_tickers, selected_combinations, latest_data = run_block_b(data_stocks, returns_benchmark)
+
+        # BLOCK C
+        from utils.block_c_covariance import run_block_c
+        cov_matrix_dict = run_block_c(selected_combinations, returns_pivot_stocks)
+
+        # BLOCK D
+        from utils.block_d_forecast import run_block_d
+        adj_returns_combinations, model_store, features_df = run_block_d(data_stocks, selected_tickers, selected_combinations)
+
+        # BLOCK E
+        from utils.block_e_feasibility import run_block_e
+        valid_combinations = run_block_e(adj_returns_combinations, cov_matrix_dict)
+
+        # BLOCK F
+        from utils.block_f_backtest import run_block_f
+        walkforward_df, best_combo = run_block_f(valid_combinations, features_df)
+
+        # BLOCK G
+        from utils.block_g_optimization import run_block_g
+        hrp_cvar_results, best_portfolio = run_block_g(valid_combinations, cov_matrix_dict, adj_returns_combinations, returns_benchmark)
+
+        # BLOCK H
+        from utils.block_h_complete_portfolio import run_block_h
+        weights, tickers_portfolio, capital_alloc, y_opt, y_capped, mu_p, sigma_p, expected_rc, sigma_c, U = run_block_h(
+            best_portfolio, rf, A, total_capital, adj_returns_combinations, cov_matrix_dict
         )
 
-        # --- BLOCK J: Stress Testing ---
-        from utils import block_j_stress_testing
-        block_j_stress_testing.run(
-            best_portfolio, data_stocks, tickers_portfolio, latest_data, cov_matrix_dict,
-            adj_returns_combinations, returns_benchmark, rf
-        )
+        # BLOCK I
+        from utils.block_i_performance_analysis import run_block_i
+        run_block_i(returns_pivot_stocks, returns_benchmark, tickers_portfolio, weights,
+                    rf, A, start_date, end_date, data_stocks, data_benchmark, benchmark_symbol)
 
-        st.success("✅ Portfolio optimization completed!")
+        # BLOCK J
+        from utils.block_j_stress_testing import run_block_j
+        run_block_j(tickers_portfolio, weights, data_stocks, latest_data)
+
+    st.success("Portfolio Optimization Completed.")
