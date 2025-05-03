@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from vnstock import listing_companies
-
 from utils import (
     data_loader, factor_ranking, return_forecast, covariance_estimation,
     portfolio_optimizer, complete_allocation, performance_eval, stress_test
@@ -12,19 +10,26 @@ import config
 # --- Page Setup ---
 st.set_page_config(page_title="📊 Portfolio Optimizer Pro", layout="wide")
 
-# --- Load Vietnamese Stock Tickers ---
-try:
-    df_listing = listing_companies()
-    tickers_all = sorted(df_listing['ticker'].dropna().unique().tolist())
-except Exception as e:
-    st.error(f"❌ Failed to load tickers from Vnstock: {e}")
-    tickers_all = ["VNM", "FPT", "MWG", "VCB", "REE"]
-
 # --- Sidebar Configuration ---
 st.sidebar.title("⚙️ Portfolio Configuration")
 
-tickers = st.sidebar.multiselect("Select Stock Tickers", options=tickers_all, default=["VNM", "FPT", "MWG", "VCB", "REE"])
-benchmark_symbol = st.sidebar.selectbox("Benchmark Symbol", options=tickers_all, index=tickers_all.index("VNINDEX") if "VNINDEX" in tickers_all else 0)
+# --- Custom Ticker Input ---
+st.sidebar.markdown("#### Stock Tickers")
+ticker_input = st.sidebar.text_input(
+    "Enter comma-separated tickers (e.g. VNM,FPT,MWG,VCB,REE)",
+    value="VNM,FPT,MWG,VCB,REE"
+)
+tickers = [x.strip().upper() for x in ticker_input.split(",") if len(x.strip()) >= 3]
+
+# --- Benchmark Input with Common Index Suggestion ---
+st.sidebar.markdown("#### Benchmark Symbol")
+benchmark_input = st.sidebar.text_input(
+    "Benchmark (e.g. VNINDEX, VN30, HNXINDEX, HNX30)",
+    value="VNINDEX"
+)
+benchmark_symbol = benchmark_input.strip().upper()
+
+# --- Date & Portfolio Params ---
 start_date = st.sidebar.date_input("Start Date", value=pd.to_datetime("2020-01-01"))
 end_date = st.sidebar.date_input("End Date", value=pd.to_datetime("today"))
 
@@ -108,7 +113,7 @@ if run_analysis:
         st.pyplot(fig_stress)
         st.dataframe(summary_stress.round(2), use_container_width=True)
 
-        st.success("🎉 Portfolio Optimization Completed Successfully!")
+        st.success("🎉 Optimization Complete!")
 
     except Exception as e:
         st.error(f"❌ Error during execution: {e}")
