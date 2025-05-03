@@ -5,31 +5,25 @@ from utils import (
     data_loader, factor_ranking, return_forecast, covariance_estimation,
     portfolio_optimizer, complete_allocation, performance_eval, stress_test
 )
-import config
 
-# --- Page Setup ---
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="📊 Portfolio Optimizer Pro", layout="wide")
 
-# --- Sidebar Configuration ---
+# --- SIDEBAR ---
 st.sidebar.title("⚙️ Portfolio Configuration")
 
-# --- Custom Ticker Input ---
-st.sidebar.markdown("#### Stock Tickers")
-ticker_input = st.sidebar.text_input(
-    "Enter comma-separated tickers",
-    value="VNM,FPT,MWG,VCB,REE"
+ticker_str = st.sidebar.text_input(
+    "Stock Tickers", 
+    value="VNM,FPT,MWG,VCB,REE", 
+    help="Enter comma-separated stock tickers (e.g., VNM,FPT,MWG)"
 )
-tickers = [x.strip().upper() for x in ticker_input.split(",") if len(x.strip()) >= 3]
 
-# --- Benchmark Input with Common Index Suggestion ---
-st.sidebar.markdown("#### Benchmark Symbol")
-benchmark_input = st.sidebar.text_input(
-    "Benchmark (e.g. VNINDEX, VN30, HNXINDEX, HNX30)",
-    value="VNINDEX"
+benchmark_symbol = st.sidebar.text_input(
+    "Benchmark Symbol", 
+    value="VNINDEX", 
+    help="Benchmark (e.g. VNINDEX, VN30, HNXINDEX, HNX30)"
 )
-benchmark_symbol = benchmark_input.strip().upper()
 
-# --- Date & Portfolio Params ---
 start_date = st.sidebar.date_input("Start Date", value=pd.to_datetime("2020-01-01"))
 end_date = st.sidebar.date_input("End Date", value=pd.to_datetime("today"))
 
@@ -40,15 +34,15 @@ A = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=10
 
 run_analysis = st.sidebar.button("🚀 Run Portfolio Optimization")
 
-# --- Main App Pipeline ---
+# --- MAIN APP ---
 if run_analysis:
     st.markdown("## 🔄 Running Portfolio Optimization Pipeline...")
 
     try:
         # --- Block A ---
         st.markdown("### 📥 Loading Data")
-        data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark = data_loader.load_data(
-            tickers=tickers,
+        data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations, portfolio_labels = data_loader.load_data(
+            ticker_str=ticker_str,
             benchmark_symbol=benchmark_symbol,
             start_date=start_date,
             end_date=end_date
@@ -57,15 +51,14 @@ if run_analysis:
 
         # --- Block B ---
         st.markdown("### 🔍 Factor Ranking")
-        selected_tickers, selected_combinations, latest_data = factor_ranking.rank_stocks(
-            data_stocks, returns_benchmark
-        )
+        selected_df = factor_ranking.rank_stocks(data_stocks, returns_benchmark)
+        selected_tickers = selected_df["Ticker"].tolist()
+        selected_combinations = ['-'.join(p) for p in list(combinations(selected_tickers, 3))]
+        latest_data = selected_df.copy()
 
         # --- Block C ---
         st.markdown("### 📐 Estimating Covariance Matrices")
-        cov_matrix_dict = covariance_estimation.compute_cov_matrices(
-            selected_combinations, returns_pivot_stocks
-        )
+        cov_matrix_dict = covariance_estimation.compute_cov_matrices(selected_combinations, returns_pivot_stocks)
 
         # --- Block D ---
         st.markdown("### 🤖 Forecasting Returns with ML")
@@ -75,9 +68,7 @@ if run_analysis:
 
         # --- Block E ---
         st.markdown("### 🧪 Prechecking Feasible Portfolios")
-        valid_combinations = portfolio_optimizer.precheck_portfolios(
-            adj_returns_combinations, cov_matrix_dict
-        )
+        valid_combinations = portfolio_optimizer.precheck_portfolios(adj_returns_combinations, cov_matrix_dict)
 
         # --- Block F ---
         walkforward_df, best_combo, best_weights, error_by_stock = return_forecast.walkforward_evaluation(
@@ -113,7 +104,7 @@ if run_analysis:
         st.pyplot(fig_stress)
         st.dataframe(summary_stress.round(2), use_container_width=True)
 
-        st.success("🎉 Optimization Complete!")
+        st.success("🎉 Optimization Complete! See results above.")
 
     except Exception as e:
         st.error(f"❌ Error during execution: {e}")
