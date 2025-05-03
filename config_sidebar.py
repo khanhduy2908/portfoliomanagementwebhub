@@ -1,35 +1,27 @@
-# config_sidebar.py
 import streamlit as st
 import pandas as pd
-import os
-import sys
+import numpy as np
 
-# Add current directory to sys.path to resolve local imports
-sys.path.append(os.path.dirname(__file__))
+from portfolio_app.config import *
 
-from config import (
-    benchmark_symbol as default_benchmark,
-    start_date as default_start_date,
-    rf_annual as default_rf_annual,
-    total_capital as default_total_capital,
-    A as default_A
-)
-
+# --- SIDEBAR CONFIG FUNCTION ---
 def sidebar_config():
-    st.sidebar.title("Configuration")
+    st.sidebar.title("📊 Portfolio Optimizer Settings")
 
     tickers = st.sidebar.text_input("Stock Tickers (comma-separated)", value="VNM,FPT,MWG,VCB,REE")
     tickers = [x.strip().upper() for x in tickers.split(",") if x.strip()]
 
-    benchmark_symbol = st.sidebar.text_input("Benchmark Symbol", value=default_benchmark)
-    start_date = st.sidebar.date_input("Start Date", value=pd.to_datetime(default_start_date))
+    benchmark_symbol = st.sidebar.text_input("Benchmark Symbol", value=benchmark_symbol)
+
+    start_date = st.sidebar.date_input("Start Date", value=pd.to_datetime(start_date))
     end_date = st.sidebar.date_input("End Date", value=pd.to_datetime("today"))
 
-    rf_annual = st.sidebar.number_input("Annual Risk-Free Rate (%)", value=default_rf_annual * 100.0) / 100.0
+    rf_annual = st.sidebar.number_input("Annual Risk-Free Rate (%)", value=rf_annual * 100) / 100
     rf = rf_annual / 12
 
-    total_capital = st.sidebar.number_input("Total Capital (VND)", value=default_total_capital)
-    A = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=10, value=default_A)
+    total_capital = st.sidebar.number_input("Total Capital (VND)", value=total_capital)
+
+    A = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=10, value=A)
 
     run_analysis = st.sidebar.button("🚀 Run Portfolio Optimization")
 
