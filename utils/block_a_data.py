@@ -1,6 +1,3 @@
-# --- BLOCK A: Data Loading and Preparation ---
-# File: utils/block_a_data.py
-
 import pandas as pd
 import numpy as np
 from itertools import combinations
