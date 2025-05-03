@@ -5,6 +5,7 @@ import optuna
 import numpy as np
 import pandas as pd
 import warnings
+from itertools import combinations
 
 # --- 1. Tính các yếu tố cơ bản (Factor Construction) ---
 def compute_factors(data_stocks, returns_benchmark):
