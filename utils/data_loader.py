@@ -13,23 +13,20 @@ def get_first_trading_day(df):
     return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0]).reset_index(drop=True)
 
 def get_stock_data(ticker, start, end):
+    print(f"📥 Fetching {ticker} from {start} to {end}")
     try:
         stock = Vnstock().stock(symbol=ticker, source='VCI')
         df = stock.quote.history(start=start, end=end)
-
         if df.empty or 'close' not in df.columns:
-            warnings.warn(f"⚠️ {ticker} không có dữ liệu hợp lệ.")
+            warnings.warn(f"⚠️ {ticker} has no valid data.")
             return pd.DataFrame()
-
         df['time'] = pd.to_datetime(df['time'])
         df.set_index('time', inplace=True)
-
         df = df[['open', 'high', 'low', 'close', 'volume']]
         df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
         return df
-
     except Exception as e:
-        warnings.warn(f"⚠️ Lỗi khi tải {ticker}: {e}")
+        warnings.warn(f"❌ Error fetching {ticker}: {e}")
         return pd.DataFrame()
 
 def load_all_monthly_data(tickers, start, end):
@@ -42,19 +39,22 @@ def load_all_monthly_data(tickers, start, end):
         df_monthly['time'] = df_monthly.index
         df_monthly['Ticker'] = ticker
         stock_data.append(df_monthly.reset_index(drop=True))
+    if not stock_data:
+        print("❌ No valid stock data downloaded.")
     return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
 
 def compute_monthly_return(df):
-    required_columns = {'Ticker', 'Close', 'time'}
-    if not required_columns.issubset(df.columns):
-        print("🛑 Cột hiện có:", df.columns.tolist())
-        raise ValueError("❌ Thiếu cột cần thiết trong dữ liệu đầu vào (Ticker, Close, time).")
-
+    if 'Ticker' not in df.columns or 'Close' not in df.columns or 'time' not in df.columns:
+        raise ValueError("❌ Missing required columns in data.")
     df = df.sort_values(['Ticker', 'time'])
     df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
     return df.dropna(subset=['Return'])
 
 def load_data(tickers, benchmark_symbol, start_date, end_date):
+    # Ép kiểu ngày về chuỗi (đảm bảo cho vnstock API)
+    start_date = pd.to_datetime(start_date).strftime('%Y-%m-%d')
+    end_date = pd.to_datetime(end_date).strftime('%Y-%m-%d')
+
     data_stocks = load_all_monthly_data(tickers, start_date, end_date)
     data_benchmark = load_all_monthly_data([benchmark_symbol], start_date, end_date)
 
@@ -63,11 +63,15 @@ def load_data(tickers, benchmark_symbol, start_date, end_date):
     if data_benchmark.empty:
         raise ValueError("❌ Không có dữ liệu benchmark được tải thành công.")
 
+    # Tính return
     returns_stocks = compute_monthly_return(data_stocks)
     returns_benchmark = compute_monthly_return(data_benchmark)
     returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
 
+    # Merge benchmark vào stock return
     returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
+
+    # Pivot stock return
     returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
     returns_benchmark.set_index('time', inplace=True)
 
