@@ -5,6 +5,7 @@ from utils import (
     data_loader, factor_ranking, return_forecast, covariance_estimation,
     portfolio_optimizer, complete_allocation, performance_eval, stress_test
 )
+import config
 
 # --- Page Setup ---
 st.set_page_config(page_title="📊 Portfolio Optimizer Pro", layout="wide")
@@ -12,11 +13,7 @@ st.set_page_config(page_title="📊 Portfolio Optimizer Pro", layout="wide")
 # --- Sidebar Configuration ---
 st.sidebar.title("⚙️ Portfolio Configuration")
 
-tickers = st.sidebar.multiselect(
-    "Select Stock Tickers",
-    options=["VNM", "FPT", "MWG", "VCB", "REE"],
-    default=["VNM", "FPT", "MWG", "VCB", "REE"]
-)
+tickers = st.sidebar.multiselect("Select Stock Tickers", options=["VNM", "FPT", "MWG", "VCB", "REE"], default=["VNM", "FPT", "MWG", "VCB", "REE"])
 benchmark_symbol = st.sidebar.text_input("Benchmark Symbol", value="VNINDEX")
 start_date = st.sidebar.date_input("Start Date", value=pd.to_datetime("2020-01-01"))
 end_date = st.sidebar.date_input("End Date", value=pd.to_datetime("today"))
@@ -28,7 +25,7 @@ A = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=10
 
 run_analysis = st.sidebar.button("🚀 Run Portfolio Optimization")
 
-# --- Run Pipeline ---
+# --- Main App Pipeline ---
 if run_analysis:
 
     st.markdown("## 🔄 Running Portfolio Optimization Pipeline...")
@@ -46,18 +43,17 @@ if run_analysis:
 
         # --- Block B ---
         st.markdown("### 🔍 Factor Ranking")
-        selected_df = factor_ranking.rank_stocks(data_stocks, returns_benchmark)
+        selected_df = factor_ranking.rank_stocks(
+            data_stocks, returns_benchmark
+        )
         selected_tickers = selected_df['Ticker'].tolist()
-        selected_combinations = list(combinations(selected_tickers, 3))
-
-        st.write("📌 Selected Tickers:", selected_tickers)
+        selected_combinations = list(itertools.combinations(selected_tickers, 3))
 
         # --- Block C ---
         st.markdown("### 📐 Estimating Covariance Matrices")
         cov_matrix_dict = covariance_estimation.compute_cov_matrices(
             selected_combinations, returns_pivot_stocks
         )
-        st.success("✅ Covariance Matrices Ready")
 
         # --- Block D ---
         st.markdown("### 🤖 Forecasting Returns with ML")
@@ -66,13 +62,12 @@ if run_analysis:
         )
 
         # --- Block E ---
-        st.markdown("### 🧪 Feasibility Precheck")
+        st.markdown("### 🧪 Prechecking Feasible Portfolios")
         valid_combinations = portfolio_optimizer.precheck_portfolios(
             adj_returns_combinations, cov_matrix_dict
         )
 
         # --- Block F ---
-        st.markdown("### 🧪 Walkforward Evaluation")
         walkforward_df, best_combo, best_weights, error_by_stock = return_forecast.walkforward_evaluation(
             valid_combinations, features_df
         )
@@ -106,7 +101,8 @@ if run_analysis:
         st.pyplot(fig_stress)
         st.dataframe(summary_stress.round(2), use_container_width=True)
 
-        st.success("🎉 Optimization Complete!")
+        # --- Final Note ---
+        st.success("🎉 Optimization Complete! See results above.")
 
     except Exception as e:
         st.error(f"❌ Error during execution: {e}")
