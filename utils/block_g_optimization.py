@@ -1,15 +1,12 @@
-import numpy as np
-import pandas as pd
-import cvxpy as cp
-from scipy.cluster.hierarchy import linkage, fcluster
-from scipy.spatial.distance import squareform
-from scipy.stats import multivariate_normal
-
-def run_block_g(valid_combinations, adj_returns_combinations, cov_matrix_dict,
-                benchmark_return_mean, alpha_cvar=0.95, lambda_cvar=5, beta_l2=0.01,
-                cvar_soft_limit=6.5, n_simulations=20000):
-
-    hrp_cvar_results = []
+def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark, alpha_cvar=0.95,
+        lambda_cvar=5, beta_l2=0.01, n_simulations=20000, cvar_soft_limit=6.5):
+    import numpy as np
+    import pandas as pd
+    import cvxpy as cp
+    from scipy.cluster.hierarchy import linkage, fcluster
+    from scipy.spatial.distance import squareform
+    from numpy.linalg import LinAlgError
+    from scipy.stats import multivariate_normal
 
     def cov_to_corr(cov):
         std = np.sqrt(np.diag(cov))
@@ -18,17 +15,20 @@ def run_block_g(valid_combinations, adj_returns_combinations, cov_matrix_dict,
     def corr_to_dist(corr):
         return np.sqrt(0.5 * (1 - corr))
 
+    benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
+    hrp_cvar_results = []
+
     for combo in valid_combinations:
         tickers = combo.split('-')
+
         try:
             mu = np.array([adj_returns_combinations[combo][t] for t in tickers]) / 100
             cov = cov_matrix_dict[combo].loc[tickers, tickers].values
 
-            # Check PSD
             if np.any(np.linalg.eigvalsh(cov) < -1e-6):
                 continue
 
-            # HRP Ordering
+            # HRP Clustering
             corr = cov_to_corr(cov)
             dist = corr_to_dist(corr)
             dist_vec = squareform(dist, checks=False)
@@ -40,10 +40,12 @@ def run_block_g(valid_combinations, adj_returns_combinations, cov_matrix_dict,
             cov_ord = cov[np.ix_(order, order)]
             tickers_ord = [tickers[i] for i in order]
 
+            # Simulated Return Scenarios
             np.random.seed(42)
             scenarios = multivariate_normal.rvs(mean=mu_ord, cov=cov_ord, size=n_simulations)
             losses = -scenarios
 
+            # Optimization Problem
             w = cp.Variable(len(tickers))
             VaR = cp.Variable()
             z = cp.Variable(n_simulations)
@@ -51,6 +53,7 @@ def run_block_g(valid_combinations, adj_returns_combinations, cov_matrix_dict,
             port_loss = losses @ w
             cvar = VaR + cp.sum(z) / ((1 - alpha_cvar) * n_simulations)
             objective = cp.Maximize(mu_ord @ w - lambda_cvar * cvar - beta_l2 * cp.sum_squares(w))
+
             constraints = [
                 cp.sum(w) == 1,
                 w >= 0,
@@ -68,6 +71,7 @@ def run_block_g(valid_combinations, adj_returns_combinations, cov_matrix_dict,
             if np.any(np.isnan(w_opt)) or np.abs(np.sum(w_opt) - 1) > 1e-3:
                 continue
 
+            # Final Metrics
             port_ret = mu_ord @ w_opt * 100
             port_vol = np.sqrt(w_opt.T @ cov_ord @ w_opt) * 100
             final_cvar = (VaR.value + np.mean(np.maximum(losses @ w_opt - VaR.value, 0)) / (1 - alpha_cvar)) * 100
@@ -84,16 +88,7 @@ def run_block_g(valid_combinations, adj_returns_combinations, cov_matrix_dict,
                 'Weights': dict(zip(tickers_ord, w_opt))
             })
 
-        except Exception as e:
-            print(f"⚠️ {combo} failed: {e}")
+        except Exception:
             continue
 
-    hrp_df = pd.DataFrame(hrp_cvar_results)
-    if not hrp_df.empty:
-        hrp_df = hrp_df.sort_values(by='Sharpe Ratio', ascending=False).reset_index(drop=True)
-        print("\n✅ HRP + Soft CVaR Optimization Completed.")
-        print(hrp_df[['Portfolio', 'Expected Return (%)', 'Volatility (%)', 'CVaR (%)', 'Sharpe Ratio']].round(2))
-    else:
-        print("❌ No valid optimized portfolios.")
-
-    return hrp_cvar_results, hrp_df
+    return pd.DataFrame(hrp_cvar_results).sort_values(by='Sharpe Ratio', ascending=False).reset_index(drop=True)
