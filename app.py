@@ -43,11 +43,10 @@ if run_analysis:
 
         # --- Block B ---
         st.markdown("### 🔍 Factor Ranking")
-        selected_df = factor_ranking.rank_stocks(
-            data_stocks, returns_benchmark
-        )
-        selected_tickers = selected_df['Ticker'].tolist()
-        selected_combinations = list(itertools.combinations(selected_tickers, 3))
+        ranking_result = factor_ranking.rank_stocks(data_stocks, returns_benchmark)
+        selected_tickers = ranking_result["selected_tickers"]
+        selected_combinations = ranking_result["selected_combinations"]
+        latest_data = ranking_result["latest_data"]
 
         # --- Block C ---
         st.markdown("### 📐 Estimating Covariance Matrices")
@@ -96,13 +95,12 @@ if run_analysis:
         # --- Block J ---
         st.markdown("### 🔥 Stress Testing (Historical + Monte Carlo)")
         fig_stress, summary_stress = stress_test.run_stress_test(
-            best_portfolio, data_stocks, selected_df, rf
+            best_portfolio, data_stocks, latest_data, rf
         )
         st.pyplot(fig_stress)
         st.dataframe(summary_stress.round(2), use_container_width=True)
 
-        # --- Final Note ---
         st.success("🎉 Optimization Complete! See results above.")
-
+    
     except Exception as e:
         st.error(f"❌ Error during execution: {e}")
