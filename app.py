@@ -48,11 +48,10 @@ config.A = A_user
 if run_analysis:
     with st.spinner("Running full analysis pipeline..."):
         # Block A
-        from vnstock import Vnstock
         data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
             config.tickers, config.benchmark_symbol, config.start_date, config.end_date
         )
-        st.success("Block A: Data loaded.")
+        st.success("Block A completed: Data loaded and transformed.")
 
         # Block B
         selected_tickers, selected_combinations, latest_data = block_b_factor.run(
