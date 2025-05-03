@@ -16,7 +16,7 @@ st.sidebar.title("⚙️ Portfolio Configuration")
 # --- Custom Ticker Input ---
 st.sidebar.markdown("#### Stock Tickers")
 ticker_input = st.sidebar.text_input(
-    "Enter comma-separated tickers (e.g. VNM,FPT,MWG,VCB,REE)",
+    "Enter comma-separated tickers",
     value="VNM,FPT,MWG,VCB,REE"
 )
 tickers = [x.strip().upper() for x in ticker_input.split(",") if len(x.strip()) >= 3]
