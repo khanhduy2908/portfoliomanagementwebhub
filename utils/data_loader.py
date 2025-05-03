@@ -1,6 +1,3 @@
-
-# utils/data_loader.py
-
 import pandas as pd
 import numpy as np
 import warnings
@@ -48,9 +45,9 @@ def compute_monthly_return(df):
     df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
     return df.dropna(subset=['Return'])
 
-def prepare_data(tickers, benchmark, start, end):
-    data_stocks = load_all_monthly_data(tickers, start, end)
-    data_benchmark = load_all_monthly_data([benchmark], start, end)
+def load_data(tickers, benchmark_symbol, start_date, end_date):
+    data_stocks = load_all_monthly_data(tickers, start_date, end_date)
+    data_benchmark = load_all_monthly_data([benchmark_symbol], start_date, end_date)
 
     returns_stocks = compute_monthly_return(data_stocks)
     returns_benchmark = compute_monthly_return(data_benchmark)
@@ -61,7 +58,4 @@ def prepare_data(tickers, benchmark, start, end):
     returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
     returns_benchmark.set_index('time', inplace=True)
 
-    portfolio_combinations = list(combinations(tickers, 3))
-    portfolio_labels = ['-'.join(p) for p in portfolio_combinations]
-
-    return returns_pivot_stocks, returns_benchmark, portfolio_combinations, portfolio_labels
+    return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark
