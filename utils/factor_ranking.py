@@ -7,7 +7,7 @@ import pandas as pd
 import warnings
 from itertools import combinations
 
-# --- 1. Factor Construction ---
+# --- 1. Tính các yếu tố cơ bản (Factor Construction) ---
 def compute_factors(data_stocks, returns_benchmark):
     factor_data = []
 
@@ -40,7 +40,7 @@ def compute_factors(data_stocks, returns_benchmark):
 
     return pd.concat(factor_data, ignore_index=True)
 
-# --- 2. Factor Ranking & Selection ---
+# --- Hàm chính để xếp hạng cổ phiếu ---
 def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
     ranking_df = compute_factors(data_stocks, returns_benchmark)
     latest_month = ranking_df['time'].max()
@@ -76,7 +76,6 @@ def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=50)
 
-    # Final weighted score
     w_opt = study.best_params
     w_arr = np.array(list(w_opt.values()))
     w_arr /= w_arr.sum()
@@ -94,7 +93,6 @@ def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
     latest_data['Cluster'] = kmeans.fit_predict(latest_data[features_for_cluster])
 
-    # Select top_n best diversified stocks across clusters
     selected_df = (
         latest_data.sort_values('Score', ascending=False)
         .groupby('Cluster')
@@ -105,6 +103,6 @@ def rank_stocks(data_stocks, returns_benchmark, top_n=5, n_clusters=3):
     )
 
     selected_tickers = selected_df['Ticker'].tolist()
-    selected_combinations = list(combinations(selected_tickers, 3))
-    
+    selected_combinations = ['-'.join(c) for c in combinations(selected_tickers, 3)]
+
     return selected_tickers, selected_combinations, selected_df
