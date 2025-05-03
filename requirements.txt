@@ -13,3 +13,4 @@ shap
 joblib
 streamlit
 tqdm
+vnstock
