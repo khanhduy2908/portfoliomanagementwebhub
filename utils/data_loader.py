@@ -1,8 +1,11 @@
+# utils/data_loader.py
+
 import pandas as pd
 import numpy as np
 import warnings
 from vnstock import Vnstock
 from itertools import combinations
+import streamlit as st
 
 def get_first_trading_day(df):
     df = df.copy()
@@ -12,6 +15,7 @@ def get_first_trading_day(df):
 
 def get_stock_data(ticker, start, end):
     try:
+        print(f"🔍 Fetching data for: {ticker}")
         stock = Vnstock().stock(symbol=ticker, source='VCI')
         df = stock.quote.history(start=start, end=end)
         if df.empty or 'close' not in df.columns:
@@ -50,19 +54,18 @@ def load_data(tickers, benchmark_symbol, start_date, end_date):
     data_benchmark = load_all_monthly_data([benchmark_symbol], start_date, end_date)
 
     if data_stocks.empty:
-        raise ValueError("❌ Không có dữ liệu cổ phiếu nào được tải thành công.")
-    if data_benchmark.empty:
-        raise ValueError("❌ Không có dữ liệu benchmark được tải thành công.")
+        st.warning("⚠️ Không có dữ liệu cổ phiếu nào được tải thành công. Vui lòng kiểm tra lại mã cổ phiếu hoặc kết nối mạng.")
+        return None, None, None, None
 
-    # Tính toán lợi suất
+    if data_benchmark.empty:
+        st.warning("⚠️ Không có dữ liệu benchmark. Vui lòng kiểm tra lại mã benchmark.")
+        return None, None, None, None
+
     returns_stocks = compute_monthly_return(data_stocks)
     returns_benchmark = compute_monthly_return(data_benchmark)
     returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
 
-    # Kết hợp lợi suất cổ phiếu với benchmark
     returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
-
-    # Pivot lợi suất để phục vụ các block sau
     returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
     returns_benchmark.set_index('time', inplace=True)
 
