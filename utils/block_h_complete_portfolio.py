@@ -4,17 +4,19 @@ def run_block_h(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
     import pandas as pd
     import matplotlib.pyplot as plt
     import cvxpy as cp
-                    
-    best_portfolio = max(hrp_cvar_results, key=lambda x: x['Sharpe Ratio']) if hrp_cvar_results else None
-    if not best_portfolio:
-        print("❌ No valid portfolio.")
+
+    if not hrp_cvar_results:
+        print("No valid portfolio found in HRP-CVaR results.")
         return
-    
+
+    # Select best portfolio
+    best_portfolio = max(hrp_cvar_results, key=lambda x: x['Sharpe Ratio'])
     tickers = list(best_portfolio['Weights'].keys())
     weights_hrp = np.array(list(best_portfolio['Weights'].values()))
     mu = np.array([adj_returns_combinations[best_portfolio['Portfolio']][t] for t in tickers]) / 100
     cov = cov_matrix_dict[best_portfolio['Portfolio']].loc[tickers, tickers].values
 
+    # Portfolio stats
     mu_p = float(mu @ weights_hrp)
     sigma_p = np.sqrt(weights_hrp.T @ cov @ weights_hrp)
 
@@ -28,8 +30,8 @@ def run_block_h(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
     capital_risky = y_capped * total_capital
     capital_rf = total_capital - capital_risky
     capital_alloc = {t: round(capital_risky * w) for t, w in zip(tickers, weights_hrp)}
-    
-    # --- 1. Bảng thông tin hiệu suất và phân bổ vốn ---
+
+    # --- Summary Table ---
     summary_info = {
         "Risk Aversion (A)": A,
         "Expected Return (E_rc)": round(expected_rc, 4),
@@ -39,31 +41,32 @@ def run_block_h(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
         "Capital (Risky)": round(capital_risky)
     }
     summary_df = pd.DataFrame(summary_info.items(), columns=["Metric", "Value"])
-    print("\n📊 Portfolio Summary:")
+
+    print("\n--- Portfolio Allocation Summary ---")
     print(summary_df.to_string(index=False))
 
-    print("\n💰 Capital Allocation Breakdown:")
+    print("\n--- Capital Allocation Breakdown ---")
     for t, v in capital_alloc.items():
-        print(f"   • {t}: {v:,.0f} VND")
+        print(f"{t}: {v:,.0f} VND")
 
-    # --- 2. Pie Chart ---
+    # --- Pie Chart ---
     labels = ['Risk-Free Asset'] + tickers
     sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
     if np.any(np.array(sizes) < 0):
-        print("⚠️ Cannot plot negative allocations.")
+        print("Warning: Negative capital allocations detected.")
     else:
         plt.figure(figsize=(8, 6))
-        plt.pie(sizes, labels=labels, autopct='%1.1f%%',
-                startangle=90, shadow=False, textprops={'fontsize': 12})
-        plt.title("Optimal Complete Portfolio Allocation", fontsize=14)
+        plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90,
+                shadow=False, textprops={'fontsize': 12})
+        plt.title("Optimal Complete Portfolio Allocation")
         plt.tight_layout()
         plt.show()
 
-    # --- 3. Bar Chart So sánh với Benchmark ---
+    # --- Bar Chart Comparison with Benchmark ---
     hrp_result_dict = {p['Portfolio']: p for p in hrp_cvar_results}
     top_n = 5
     top_portfolios = sorted(hrp_result_dict.items(), key=lambda x: x[1]['Sharpe Ratio'], reverse=True)[:top_n]
-    
+
     combos = [x[0] for x in top_portfolios]
     returns = [x[1]['Expected Return (%)'] for x in top_portfolios]
     vols = [x[1]['Volatility (%)'] for x in top_portfolios]
@@ -77,11 +80,11 @@ def run_block_h(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
     plt.bar(x, vols, width, label='Volatility (%)', color='#ff7f0e')
     plt.bar(x + width, cvars, width, label='CVaR (%)', color='#d62728')
     plt.axhline(benchmark_return_mean * 100, color='green', linestyle='--', linewidth=2,
-                label=f"VNINDEX Return ({benchmark_return_mean*100:.2f}%)")
+                label=f"Benchmark Return ({benchmark_return_mean * 100:.2f}%)")
 
     plt.xticks(x, combos, rotation=45)
     plt.ylabel("Percentage (%)")
-    plt.title("Performance Comparison: HRP Portfolios vs VNINDEX")
+    plt.title("Top HRP Portfolios vs Benchmark")
     plt.legend()
     plt.grid(False)
     plt.tight_layout()
