@@ -1,11 +1,10 @@
-import pandas as pd
-import numpy as np
-from itertools import combinations
-import warnings
-import streamlit as st
-
 def load_data(tickers, benchmark_symbol, start_date, end_date):
-    from vnstock import stock
+    from vnstock import Vnstock
+    import pandas as pd
+    import numpy as np
+    from itertools import combinations
+    import warnings
+    import streamlit as st
     all_symbols = tickers + [benchmark_symbol]
     data_all = []
 
