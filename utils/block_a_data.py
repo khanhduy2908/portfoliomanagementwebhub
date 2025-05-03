@@ -11,7 +11,7 @@ def load_data(tickers, benchmark_symbol, start_date, end_date):
 
     st.info(f"Loading data for {len(all_symbols)} tickers...")
 
-    stock = Vnstock().stock  # Ensure this is initialized correctly
+    stock = Vnstock().stock
 
     for symbol in all_symbols:
         try:
