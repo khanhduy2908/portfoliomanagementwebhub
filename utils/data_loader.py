@@ -14,8 +14,11 @@ def get_stock_data(ticker, start, end):
     try:
         stock = Vnstock().stock(symbol=ticker, source='VCI')
         df = stock.quote.history(start=start, end=end)
-        if df.empty or 'close' not in df.columns:
-            warnings.warn(f"{ticker} không có dữ liệu hợp lệ.")
+        if df.empty:
+            warnings.warn(f"{ticker} trả về dữ liệu rỗng.")
+            return pd.DataFrame()
+        if not all(col in df.columns for col in ['close', 'open', 'high', 'low', 'volume']):
+            warnings.warn(f"{ticker} thiếu cột cần thiết.")
             return pd.DataFrame()
         df['time'] = pd.to_datetime(df['time'])
         df.set_index('time', inplace=True)
