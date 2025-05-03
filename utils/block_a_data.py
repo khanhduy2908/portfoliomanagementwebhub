@@ -1,58 +1,54 @@
-def run(tickers, benchmark_symbol, start_date, end_date):
+def load_data(tickers, benchmark_symbol, start_date, end_date):
     import pandas as pd
-    import numpy as np
-    from vnstock import Vnstock
-    from itertools import combinations
+    from vnstock import stock
 
-    def get_first_trading_day(df):
-        df = df.copy()
-        df.index = pd.to_datetime(df.index)
-        df = df.sort_index()
-        return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0]).reset_index(drop=True)
-
-    def get_stock_data(ticker):
+    all_symbols = tickers + [benchmark_symbol]
+    data_all = []
+    for ticker in all_symbols:
         try:
-            stock = Vnstock().stock(symbol=ticker, source='VCI')
-            df = stock.quote.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
-            if df.empty or 'close' not in df.columns:
-                return pd.DataFrame()
-            df['time'] = pd.to_datetime(df['time'])
-            df.set_index('time', inplace=True)
-            df = df[['open', 'high', 'low', 'close', 'volume']]
-            df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-            return df
-        except:
-            return pd.DataFrame()
+            df = stock.historical_data(ticker, start_date, end_date, resolution='1D')
+            if df is not None and not df.empty:
+                df['Ticker'] = ticker
+                data_all.append(df)
+        except Exception as e:
+            print(f"❌ Error fetching {ticker}: {e}")
 
-    def load_all_monthly_data(ticker_list):
-        all_data = []
-        for ticker in ticker_list:
-            df = get_stock_data(ticker)
-            if df.empty:
-                continue
-            df_monthly = get_first_trading_day(df)
-            df_monthly['time'] = df_monthly.index
-            df_monthly['Ticker'] = ticker
-            all_data.append(df_monthly.reset_index(drop=True))
-        return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
+    if not data_all:
+        raise ValueError("❌ Không có dữ liệu cổ phiếu nào được tải thành công.")
 
-    def compute_monthly_return(df):
-        df = df.sort_values(['Ticker', 'time'])
-        df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
-        return df.dropna(subset=['Return'])
+    df_all = pd.concat(data_all, ignore_index=True)
+    if 'time' not in df_all.columns or 'Ticker' not in df_all.columns:
+        raise KeyError("❌ Dữ liệu thiếu cột 'Ticker' hoặc 'time'")
 
-    data_stocks = load_all_monthly_data(tickers)
-    data_benchmark = load_all_monthly_data([benchmark_symbol])
+    df_all['time'] = pd.to_datetime(df_all['time'])
+    return df_all
 
-    returns_stocks = compute_monthly_return(data_stocks)
-    returns_benchmark = compute_monthly_return(data_benchmark)
-    returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
+def compute_monthly_return(df):
+    import pandas as pd
 
-    returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
-    returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
-    returns_benchmark.set_index('time', inplace=True)
+    if 'Ticker' not in df.columns or 'time' not in df.columns:
+        raise KeyError("❌ Dữ liệu đầu vào thiếu cột 'Ticker' hoặc 'time'")
 
-    portfolio_combinations = list(combinations(tickers, 3))
-    portfolio_labels = ['-'.join(p) for p in portfolio_combinations]
+    df = df.sort_values(['Ticker', 'time'])
+    df.set_index('time', inplace=True)
 
-    return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_labels
+    monthly_returns = []
+    for ticker in df['Ticker'].unique():
+        df_ticker = df[df['Ticker'] == ticker]['Close'].resample('M').last().pct_change().dropna()
+        monthly_returns.append(pd.DataFrame({ticker: df_ticker}))
+
+    df_returns = pd.concat(monthly_returns, axis=1)
+    return df_returns
+
+def compute_benchmark_return(df, benchmark_symbol):
+    import pandas as pd
+
+    df_benchmark = df[df['Ticker'] == benchmark_symbol].copy()
+    if df_benchmark.empty:
+        raise ValueError("❌ Dữ liệu Benchmark rỗng hoặc không tồn tại.")
+
+    df_benchmark['time'] = pd.to_datetime(df_benchmark['time'])
+    df_benchmark.set_index('time', inplace=True)
+    df_benchmark = df_benchmark['Close'].resample('M').last().pct_change().dropna()
+    df_benchmark = df_benchmark.to_frame(name='Benchmark_Return')
+    return df_benchmark
