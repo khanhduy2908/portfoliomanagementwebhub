@@ -1,9 +1,10 @@
+# config_sidebar.py
 import streamlit as st
 import pandas as pd
 import numpy as np
-from portfolio_app.config import A, rf_annual, total_capital
 
-# --- SIDEBAR CONFIGURATION ---
+from config import A, rf_annual, total_capital  # ✅ KHÔNG dùng portfolio_app.config
+
 def sidebar_config():
     st.sidebar.title("Portfolio Configuration")
 
@@ -19,7 +20,6 @@ def sidebar_config():
     rf_user = rf_annual_user / 12
 
     total_capital_user = st.sidebar.number_input("Total Capital (VND)", value=total_capital)
-
     A_user = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=10, value=A)
 
     run_analysis = st.sidebar.button("🚀 Run Portfolio Optimization")
