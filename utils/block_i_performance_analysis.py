@@ -1,6 +1,3 @@
-# --- BLOCK I: Comprehensive Performance Evaluation (9 Institutional Charts) ---
-# File: utils/block_i_performance.py
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
