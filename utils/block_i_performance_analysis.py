@@ -1,17 +1,23 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.colors import Normalize, to_rgb
 from sklearn.linear_model import LinearRegression
 
-def run_block_i(best_portfolio, returns_pivot_stocks, returns_benchmark, rf, start_date, end_date):
-    tickers_portfolio = list(best_portfolio['Weights'].keys())
+def run(best_portfolio, returns_pivot_stocks, returns_benchmark, data_stocks, data_benchmark,
+        benchmark_symbol, rf, A, start_date, end_date, hrp_cvar_results,
+        adj_returns_combinations, cov_matrix_dict):
+
     weights = np.array(list(best_portfolio['Weights'].values()))
+    tickers_portfolio = list(best_portfolio['Weights'].keys())
 
     returns_portfolio_df = returns_pivot_stocks[tickers_portfolio].copy()
     benchmark_returns_df = returns_benchmark.copy()
 
-    # Align dates
     returns_portfolio_df.index = pd.to_datetime(returns_portfolio_df.index)
     benchmark_returns_df.index = pd.to_datetime(benchmark_returns_df.index)
+
     common_dates = returns_portfolio_df.index.intersection(benchmark_returns_df.index)
     returns_portfolio_df = returns_portfolio_df.loc[common_dates]
     benchmark_returns_df = benchmark_returns_df.loc[common_dates]
@@ -24,25 +30,21 @@ def run_block_i(best_portfolio, returns_pivot_stocks, returns_benchmark, rf, sta
     cumulative_returns /= cumulative_returns.iloc[0]
     benchmark_cumulative /= benchmark_cumulative.iloc[0]
 
-    # Metrics
     mean_return = portfolio_returns.mean()
     volatility = portfolio_returns.std()
     sharpe_ratio = (mean_return - rf * 100) / volatility if volatility != 0 else np.nan
-
     downside = portfolio_returns[portfolio_returns < rf * 100]
     sortino_ratio = (mean_return - rf * 100) / downside.std() if not downside.empty else np.nan
 
     drawdown = cumulative_returns / cumulative_returns.cummax() - 1
     max_drawdown = drawdown.min()
 
-    if len(cumulative_returns) >= 2:
-        years = (cumulative_returns.index[-1] - cumulative_returns.index[0]).days / 365.25
-        cagr = cumulative_returns.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
-        calmar_ratio = cagr / abs(max_drawdown) if max_drawdown != 0 else np.nan
-    else:
-        cagr = calmar_ratio = np.nan
+    years = (cumulative_returns.index[-1] - cumulative_returns.index[0]).days / 365.25
+    cagr = cumulative_returns.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
+    calmar_ratio = cagr / abs(max_drawdown) if max_drawdown != 0 else np.nan
 
-    # Alpha / Beta / Info Ratio
+    rolling_sharpe = (portfolio_returns - rf * 100).rolling(12).mean() / portfolio_returns.rolling(12).std()
+
     aligned_df = pd.concat([portfolio_returns, benchmark_returns], axis=1).dropna()
     aligned_df.columns = ['Portfolio', 'Benchmark']
     if len(aligned_df) >= 2:
@@ -57,6 +59,7 @@ def run_block_i(best_portfolio, returns_pivot_stocks, returns_benchmark, rf, sta
     else:
         alpha = beta = r_squared = tracking_error = info_ratio = np.nan
 
+    benchmark_cagr = benchmark_cumulative.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
     summary_df = pd.DataFrame({
         'Metric': ['Mean Return', 'Volatility', 'Sharpe Ratio', 'Sortino Ratio',
                    'Max Drawdown', 'CAGR', 'Calmar Ratio'],
@@ -68,7 +71,7 @@ def run_block_i(best_portfolio, returns_pivot_stocks, returns_benchmark, rf, sta
             (benchmark_returns.mean() - rf * 100) / benchmark_returns.std() if benchmark_returns.std() != 0 else np.nan,
             np.nan,
             benchmark_cumulative.pct_change().min(),
-            benchmark_cumulative.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan,
+            benchmark_cagr,
             np.nan
         ]
     })
@@ -78,14 +81,38 @@ def run_block_i(best_portfolio, returns_pivot_stocks, returns_benchmark, rf, sta
         'Value': [alpha, beta, r_squared, tracking_error, info_ratio]
     })
 
-    results = {
-        "summary_df": summary_df.round(4),
-        "benchmark_comparison": benchmark_comparison.round(4),
-        "portfolio_returns": portfolio_returns,
-        "benchmark_returns": benchmark_returns,
-        "cumulative_returns": cumulative_returns,
-        "benchmark_cumulative": benchmark_cumulative,
-        "drawdown": drawdown
-    }
+    print("\nPortfolio Performance Summary:")
+    print(summary_df.round(4))
+    print("\nBenchmark Regression Statistics:")
+    print(benchmark_comparison.round(4))
 
-    return results
+    # 1. Cumulative Returns
+    plt.figure(figsize=(12, 6))
+    plt.plot(cumulative_returns.index, cumulative_returns, label='Portfolio', color='blue')
+    plt.plot(benchmark_cumulative.index, benchmark_cumulative, label='Benchmark', color='red')
+    plt.title("Cumulative Returns (Normalized)")
+    plt.xlabel("Time")
+    plt.ylabel("Index Level")
+    plt.legend()
+    plt.grid(False)
+    plt.tight_layout()
+    plt.show()
+
+    # 2. Drawdown
+    plt.figure(figsize=(14, 4))
+    plt.fill_between(drawdown.index, drawdown, color='red', alpha=0.3)
+    plt.title("Portfolio Drawdown")
+    plt.ylabel("Drawdown (%)")
+    plt.grid(False)
+    plt.tight_layout()
+    plt.show()
+
+    # 3. Rolling Sharpe
+    plt.figure(figsize=(14, 4))
+    plt.plot(rolling_sharpe.index, rolling_sharpe, label='12M Rolling Sharpe', color='purple')
+    plt.axhline(0, linestyle='--', color='black')
+    plt.title("12M Rolling Sharpe Ratio")
+    plt.xlabel("Time")
+    plt.grid(False)
+    plt.tight_layout()
+    plt.show()
