@@ -20,15 +20,32 @@ from utils import (
 st.set_page_config(page_title="Institutional Portfolio Optimization", layout="wide")
 st.title("Institutional Portfolio Optimization Platform")
 
-# --- Sidebar Inputs ---
-st.sidebar.header("User Configuration")
-tickers_input = st.sidebar.text_input("Stock Tickers (comma-separated)", value="VNM,FPT,MWG,VCB,REE")
-tickers_user = [x.strip().upper() for x in tickers_input.split(",") if x.strip()]
+# --- Sidebar Inputs (Dropdown danh sách mã cổ phiếu và benchmark) ---
+from vnstock import listing_companies
 
-benchmark_user = st.sidebar.text_input("Benchmark Symbol", value="VNINDEX")
+try:
+    all_symbols_df = listing_companies(source='VCI')
+    valid_symbols = sorted(all_symbols_df['ticker'].dropna().unique().tolist())
+except Exception as e:
+    st.sidebar.error(f"Lỗi khi tải danh sách mã cổ phiếu: {e}")
+    valid_symbols = ["VNM", "FPT", "MWG", "VCB", "REE", "VNINDEX", "VN30"]
+
+st.sidebar.header("User Configuration")
+
+tickers_user = st.sidebar.multiselect(
+    "Chọn mã cổ phiếu",
+    options=valid_symbols,
+    default=["VNM", "FPT", "MWG", "VCB", "REE"]
+)
+
+benchmark_user = st.sidebar.selectbox(
+    "Chọn Benchmark",
+    options=["VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX"] + valid_symbols,
+    index=0
+)
+
 start_user = st.sidebar.date_input("Start Date", value=datetime.date(2020, 1, 1))
 end_user = st.sidebar.date_input("End Date", value=datetime.date.today())
-
 rf_user = st.sidebar.number_input("Annual Risk-Free Rate (%)", value=9.0) / 100
 capital_user = st.sidebar.number_input("Total Capital (VND)", value=750_000_000)
 A_user = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=10, value=5)
@@ -50,7 +67,7 @@ if run_analysis:
     with st.spinner("Running full optimization pipeline..."):
         try:
             with st.container():
-                st.subheader("Block A – Data Loading and Return Computation")
+                st.subheader("Block A – Data Loading")
                 data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
                     config.tickers, config.benchmark_symbol, config.start_date, config.end_date
                 )
@@ -61,31 +78,27 @@ if run_analysis:
                 selected_tickers, selected_combinations, latest_data = block_b_factor.run(
                     data_stocks, returns_benchmark
                 )
-                st.write("Selected tickers after factor filtering:", selected_tickers)
+                st.write("Selected tickers:", selected_tickers)
 
             with st.container():
                 st.subheader("Block C – Covariance Estimation")
                 cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
-                st.write("Covariance matrices estimated.")
 
             with st.container():
                 st.subheader("Block D – Return Forecasting")
                 adj_returns_combinations, model_store, features_df = block_d_forecast.run(
                     data_stocks, selected_tickers, selected_combinations
                 )
-                st.write("Forecast completed for combinations.")
 
             with st.container():
                 st.subheader("Block E – Feasibility Check")
                 valid_combinations = block_e_feasibility.run(
                     adj_returns_combinations, cov_matrix_dict
                 )
-                st.write("Feasible portfolios:", list(valid_combinations.keys())[:5])
 
             with st.container():
                 st.subheader("Block F – Walk-forward Backtest")
                 walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df)
-                st.write("Walk-forward completed.")
                 with st.expander("Backtest Error Summary"):
                     st.dataframe(error_by_stock)
 
@@ -94,7 +107,6 @@ if run_analysis:
                 hrp_cvar_results = block_g_optimization.run(
                     valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark
                 )
-                st.write("Optimization results for top portfolios.")
 
             with st.container():
                 st.subheader("Block H – Complete Portfolio Construction")
@@ -120,4 +132,4 @@ if run_analysis:
 
             st.success("All blocks completed successfully.")
         except Exception as e:
-            st.error(f"Pipeline execution failed: {str(e)}")
+            st.error(f"Pipeline error: {str(e)}")
