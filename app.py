@@ -41,7 +41,7 @@ start_user = st.sidebar.date_input("Start Date", value=datetime.date(2020, 1, 1)
 end_user = st.sidebar.date_input("End Date", value=datetime.date.today())
 rf_user = st.sidebar.number_input("Annual Risk-Free Rate (%)", value=9.0) / 100
 capital_user = st.sidebar.number_input("Total Capital (VND)", value=750_000_000)
-A_user = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=10, value=5)
+A_user = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=40, value=5)
 run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
 # --- Overwrite Config ---
