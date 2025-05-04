@@ -1,81 +1,109 @@
 import pandas as pd
 import numpy as np
-import warnings
+import requests
+from datetime import datetime
 from itertools import combinations
-from vnstock import Vnstock
 import streamlit as st
 
-def get_first_trading_day(df):
-    df = df.copy()
-    df.index = pd.to_datetime(df.index)
-    df = df.sort_index()
-    return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0]).reset_index(drop=True)
 
-def get_stock_data(ticker, start, end):
+def get_stock_data_ssi(ticker, start_date, end_date):
     try:
-        stock = Vnstock().stock(symbol=ticker, source='VCI')
-        df = stock.quote.history(start=start, end=end)
-        if df.empty or 'close' not in df.columns:
-            warnings.warn(f"{ticker} không có dữ liệu hợp lệ.")
+        start_ts = int(pd.to_datetime(start_date).timestamp())
+        end_ts = int(pd.to_datetime(end_date).timestamp())
+
+        url = f"https://iboard.ssi.com.vn/dchart/api/history?symbol={ticker}&resolution=D&from={start_ts}&to={end_ts}"
+        response = requests.get(url)
+        data = response.json()
+
+        if 't' not in data or len(data['t']) == 0:
             return pd.DataFrame()
-        df['time'] = pd.to_datetime(df['time'])
-        df.set_index('time', inplace=True)
-        df = df[['open', 'high', 'low', 'close', 'volume']]
-        df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+
+        df = pd.DataFrame({
+            'time': pd.to_datetime(data['t'], unit='s'),
+            'Open': data['o'],
+            'High': data['h'],
+            'Low': data['l'],
+            'Close': data['c'],
+            'Volume': data['v']
+        })
+        df['Ticker'] = ticker
         return df
     except Exception as e:
-        warnings.warn(f"Lỗi khi tải {ticker}: {e}")
+        print(f"Error retrieving {ticker}: {e}")
         return pd.DataFrame()
 
-def load_all_monthly_data(tickers, start, end):
-    stock_data = []
-    for ticker in tickers:
-        df = get_stock_data(ticker, start=start, end=end)
+
+def load_data(tickers, benchmark_symbol, start_date, end_date):
+    all_symbols = tickers + [benchmark_symbol]
+    all_data = []
+    failed_symbols = []
+
+    for symbol in all_symbols:
+        df = get_stock_data_ssi(symbol, start_date, end_date)
         if df.empty:
-            st.warning(f"Không có dữ liệu cho mã: {ticker}")
+            failed_symbols.append(symbol)
             continue
-        df_monthly = get_first_trading_day(df)
-        df_monthly['time'] = df_monthly.index
-        df_monthly['Ticker'] = ticker
-        stock_data.append(df_monthly.reset_index(drop=True))
-    if not stock_data:
+        all_data.append(df)
+
+    if not all_data:
         raise ValueError("Không có mã cổ phiếu nào có dữ liệu hợp lệ.")
-    return pd.concat(stock_data, ignore_index=True)
+
+    df_all = pd.concat(all_data, ignore_index=True)
+    return df_all, [s for s in tickers if s not in failed_symbols], benchmark_symbol if benchmark_symbol not in failed_symbols else None, failed_symbols
+
 
 def compute_monthly_return(df):
     if 'Ticker' not in df.columns or 'Close' not in df.columns or 'time' not in df.columns:
-        raise ValueError("Thiếu cột cần thiết trong dữ liệu đầu vào.")
+        raise ValueError("Thiếu cột cần thiết trong dữ liệu.")
+
+    df = df.copy()
+    df['time'] = pd.to_datetime(df['time'])
     df = df.sort_values(['Ticker', 'time'])
-    df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
-    return df.dropna(subset=['Return'])
+
+    monthly_returns = []
+    for ticker in df['Ticker'].unique():
+        try:
+            prices = df[df['Ticker'] == ticker].set_index('time')['Close']
+            monthly = prices.resample('M').last().pct_change().dropna()
+            monthly_returns.append(pd.DataFrame({ticker: monthly}))
+        except Exception as e:
+            print(f"Return error {ticker}: {e}")
+            continue
+
+    if not monthly_returns:
+        raise ValueError("Không có dữ liệu return hợp lệ.")
+
+    return pd.concat(monthly_returns, axis=1)
+
+
+def compute_benchmark_return(df_all, benchmark_symbol):
+    df_bm = df_all[df_all['Ticker'] == benchmark_symbol]
+    if df_bm.empty:
+        raise ValueError("Không có dữ liệu benchmark.")
+
+    prices = df_bm.set_index('time')['Close']
+    monthly = prices.resample('M').last().pct_change().dropna()
+    return monthly.to_frame(name="Benchmark_Return")
+
 
 def run(tickers, benchmark_symbol, start_date, end_date):
-    st.subheader("Block A – Lấy dữ liệu và tính toán return hàng tháng")
+    st.subheader("Block A – Data Loading and Return Computation")
 
-    # Lấy dữ liệu
-    data_stocks = load_all_monthly_data(tickers, start=start_date, end=end_date)
-    data_benchmark = load_all_monthly_data([benchmark_symbol], start=start_date, end=end_date)
+    df_all, tickers_ok, benchmark_ok, failed_symbols = load_data(tickers, benchmark_symbol, start_date, end_date)
 
-    # Tính return
-    returns_stocks = compute_monthly_return(data_stocks)
-    returns_benchmark = compute_monthly_return(data_benchmark)
-    returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
+    if not tickers_ok:
+        raise ValueError("Không có mã cổ phiếu nào có dữ liệu hợp lệ.")
 
-    returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
-    returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
-    returns_benchmark.set_index('time', inplace=True)
+    data_stocks = df_all[df_all['Ticker'].isin(tickers_ok)]
+    data_benchmark = df_all[df_all['Ticker'] == benchmark_ok] if benchmark_ok else pd.DataFrame()
 
-    portfolio_combinations = list(combinations(tickers, 3))
-    portfolio_labels = ['-'.join(p) for p in portfolio_combinations]
+    returns_pivot_stocks = compute_monthly_return(data_stocks)
+    returns_benchmark = compute_benchmark_return(df_all, benchmark_ok) if benchmark_ok else pd.DataFrame()
 
-    # Hiển thị kết quả mẫu
-    st.write("Sample Stock Returns:")
-    st.dataframe(returns_pivot_stocks.head())
+    portfolio_combinations = list(combinations(tickers_ok, 3))
 
-    st.write("Benchmark Sample:")
-    st.dataframe(returns_benchmark.head())
-
-    st.write("Portfolio Combinations:")
-    st.write(portfolio_labels)
+    st.write("Số mã thành công:", len(tickers_ok))
+    if failed_symbols:
+        st.warning(f"Các mã lỗi không tải được: {failed_symbols}")
 
     return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations
