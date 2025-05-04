@@ -30,17 +30,23 @@ except Exception as e:
     st.sidebar.error(f"Lỗi khi tải danh sách mã cổ phiếu: {e}")
     valid_symbols = ["VNM", "FPT", "MWG", "VCB", "REE", "VNINDEX", "VN30"]
 
+# --- Load valid stock ticker list ---
+with open("valid_tickers.txt", "r") as f:
+    valid_tickers_list = [line.strip() for line in f.readlines()]
+
+# --- Sidebar Inputs ---
 st.sidebar.header("User Configuration")
 
 tickers_user = st.sidebar.multiselect(
-    "Chọn mã cổ phiếu",
-    options=valid_symbols,
-    default=["VNM", "FPT", "MWG", "VCB", "REE"]
+    "Select Stock Tickers",
+    options=valid_tickers_list,
+    default=["VNM", "FPT", "MWG", "VCB", "REE"],
+    help="Chọn tối đa 5 cổ phiếu để tối ưu hóa danh mục"
 )
 
 benchmark_user = st.sidebar.selectbox(
-    "Chọn Benchmark",
-    options=["VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX"] + valid_symbols,
+    "Select Benchmark Index",
+    options=["VNINDEX", "VN30", "HNXINDEX", "UPCOM"] + valid_tickers_list,
     index=0
 )
 
