@@ -1,117 +1,74 @@
-# --- BLOCK A: Data Loading with Multi-Source Fallback ---
-
 import pandas as pd
 import numpy as np
 import streamlit as st
 import warnings
 from datetime import datetime
 from itertools import combinations
+from vnstock import Vnstock
 
-# Optional: try to import vnstock
-try:
-    from vnstock import Vnstock
-    vnstock_available = True
-except ImportError:
-    vnstock_available = False
+def get_first_trading_day(df):
+    df = df.copy()
+    df.index = pd.to_datetime(df.index)
+    df = df.sort_index()
+    return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0]).reset_index(drop=True)
 
-# === 1. Fallback Source: CafeF ===
-def get_cafef_price(ticker, start_date='2020-01-01'):
-    url = f"https://s.cafef.vn/Lich-su-giao-dich-{ticker}.chn"
+def get_stock_data(ticker, start, end):
     try:
-        tables = pd.read_html(url)
-        df = tables[1].copy()
-        df.columns = ['Date', 'Close', 'Change', 'Volume', 'Open', 'High', 'Low']
-        df['Date'] = pd.to_datetime(df['Date'], format='%d/%m/%Y')
-        df = df[df['Date'] >= pd.to_datetime(start_date)]
-        df.sort_values('Date', inplace=True)
-        df['Ticker'] = ticker
+        stock = Vnstock().stock(symbol=ticker, source='VCI')
+        df = stock.quote.history(start=start, end=end)
+        if df.empty or 'close' not in df.columns:
+            warnings.warn(f"{ticker} không có dữ liệu hợp lệ.")
+            return pd.DataFrame()
+        df['time'] = pd.to_datetime(df['time'])
+        df.set_index('time', inplace=True)
+        df = df[['open', 'high', 'low', 'close', 'volume']]
+        df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
         return df
     except Exception as e:
+        warnings.warn(f"Lỗi khi tải {ticker}: {e}")
         return pd.DataFrame()
 
-# === 2. Optional Backup CSV (manually uploaded or preloaded) ===
-def load_from_backup_csv(ticker):
-    path = f"backup_data/{ticker}.csv"
-    try:
-        df = pd.read_csv(path, parse_dates=['Date'])
-        df['Ticker'] = ticker
-        return df
-    except:
-        return pd.DataFrame()
+def load_all_monthly_data(tickers, start, end):
+    stock_data = []
+    for ticker in tickers:
+        df = get_stock_data(ticker, start, end)
+        if df.empty:
+            st.warning(f"Không có dữ liệu cho mã: {ticker}")
+            continue
+        df_monthly = get_first_trading_day(df)
+        df_monthly['time'] = df_monthly.index
+        df_monthly['Ticker'] = ticker
+        stock_data.append(df_monthly.reset_index(drop=True))
+    return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
 
-# === 3. Preferred Source: vnstock ===
-def get_vnstock_data(ticker, start_date, end_date):
-    if not vnstock_available:
-        return pd.DataFrame()
-    try:
-        stock = Vnstock().stock(symbol=ticker, source="SSI")
-        df = stock.quote.history(start=start_date, end=end_date)
-        df['Date'] = pd.to_datetime(df['time'])
-        df = df[['Date', 'close']].rename(columns={'close': 'Close'})
-        df['Ticker'] = ticker
-        return df
-    except:
-        return pd.DataFrame()
-
-# === Master Fetch Function ===
-def fetch_data(ticker, start_date, end_date):
-    df = get_vnstock_data(ticker, start_date, end_date)
-    if df.empty:
-        df = get_cafef_price(ticker, start_date)
-    if df.empty:
-        df = load_from_backup_csv(ticker)
-    return df
-
-# === Load Data for All Tickers ===
-def load_data(tickers, benchmark_symbol, start_date, end_date):
-    all_symbols = tickers + [benchmark_symbol]
-    all_data = []
-    failed = []
-
-    for symbol in all_symbols:
-        df = fetch_data(symbol, start_date, end_date)
-        if not df.empty:
-            all_data.append(df)
-        else:
-            failed.append(symbol)
-
-    if not all_data:
-        raise ValueError("No valid stock data retrieved.")
-
-    df_all = pd.concat(all_data, ignore_index=True)
-    return df_all, [s for s in tickers if s not in failed], benchmark_symbol not in failed, failed
-
-# === Compute Monthly Return ===
 def compute_monthly_return(df):
-    df = df.sort_values(['Ticker', 'Date']).copy()
-    df.set_index('Date', inplace=True)
-    monthly_returns = []
+    if 'Ticker' not in df.columns or 'Close' not in df.columns or 'time' not in df.columns:
+        raise ValueError("Thiếu cột cần thiết trong dữ liệu đầu vào.")
+    df = df.sort_values(['Ticker', 'time'])
+    df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
+    return df.dropna(subset=['Return'])
 
-    for ticker in df['Ticker'].unique():
-        prices = df[df['Ticker'] == ticker]['Close'].resample('M').last()
-        ret = prices.pct_change().dropna()
-        monthly_returns.append(pd.DataFrame({ticker: ret}))
-
-    return pd.concat(monthly_returns, axis=1)
-
-# === Streamlit Block A Runner ===
 def run(tickers, benchmark_symbol, start_date, end_date):
-    st.subheader("Block A – Data Loading and Return Computation")
+    st.subheader("Block A – Data Loading and Monthly Return Computation")
 
-    df_all, tickers_ok, benchmark_ok, failed = load_data(tickers, benchmark_symbol, start_date, end_date)
-    if len(tickers_ok) == 0:
+    data_stocks = load_all_monthly_data(tickers, start_date, end_date)
+    data_benchmark = load_all_monthly_data([benchmark_symbol], start_date, end_date)
+
+    if data_stocks.empty:
         raise ValueError("Không có mã cổ phiếu nào có dữ liệu hợp lệ.")
 
-    stock_data = df_all[df_all['Ticker'].isin(tickers_ok)]
-    benchmark_data = df_all[df_all['Ticker'] == benchmark_symbol]
+    returns_stocks = compute_monthly_return(data_stocks)
+    returns_benchmark = compute_monthly_return(data_benchmark)
+    returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
 
-    returns_stocks = compute_monthly_return(stock_data)
-    returns_benchmark = compute_monthly_return(benchmark_data)
-    returns_benchmark = returns_benchmark.rename(columns={returns_benchmark.columns[0]: 'Benchmark_Return'})
+    merged_returns = returns_stocks.merge(returns_benchmark, on='time', how='inner')
 
-    portfolio_combinations = list(combinations(tickers_ok, 3))
+    returns_pivot_stocks = merged_returns.pivot(index='time', columns='Ticker', values='Return')
+    returns_benchmark.set_index('time', inplace=True)
+
+    portfolio_combinations = list(combinations(tickers, 3))
 
     st.write("Sample Stock Returns:")
-    st.dataframe(returns_stocks.head())
+    st.dataframe(returns_pivot_stocks.head())
 
-    return stock_data, benchmark_data, returns_stocks, returns_benchmark, portfolio_combinations
+    return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations
