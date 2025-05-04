@@ -51,9 +51,14 @@ if run_analysis:
         try:
             with st.container():
                 st.subheader("Block A – Data Loading")
-                data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
-                    config.tickers, config.benchmark_symbol, config.start_date, config.end_date
-                )
+                try:
+                    data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
+                        config.tickers, config.benchmark_symbol, config.start_date, config.end_date
+                    )
+                except ValueError as e:
+                    st.error(f"Block A failed: {str(e)}")
+                    st.stop()
+
                 st.write("Sample stock returns:")
                 st.dataframe(returns_pivot_stocks.head())
 
@@ -62,31 +67,29 @@ if run_analysis:
                 selected_tickers, selected_combinations, latest_data = block_b_factor.run(
                     data_stocks, returns_benchmark
                 )
-                st.write("Selected tickers after factor filtering:", selected_tickers)
+                st.write("Selected tickers after filtering:", selected_tickers)
 
             with st.container():
                 st.subheader("Block C – Covariance Estimation")
-                cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
-                st.write("Covariance matrices estimated.")
+                cov_matrix_dict = block_c_covariance.run(
+                    selected_combinations, returns_pivot_stocks
+                )
 
             with st.container():
                 st.subheader("Block D – Return Forecasting")
                 adj_returns_combinations, model_store, features_df = block_d_forecast.run(
                     data_stocks, selected_tickers, selected_combinations
                 )
-                st.write("Forecast completed for combinations.")
 
             with st.container():
                 st.subheader("Block E – Feasibility Check")
                 valid_combinations = block_e_feasibility.run(
                     adj_returns_combinations, cov_matrix_dict
                 )
-                st.write("Feasible portfolios:", list(valid_combinations.keys())[:5])
 
             with st.container():
                 st.subheader("Block F – Walk-forward Backtest")
                 walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df)
-                st.write("Walk-forward completed.")
                 with st.expander("Backtest Error Summary"):
                     st.dataframe(error_by_stock)
 
@@ -95,7 +98,6 @@ if run_analysis:
                 hrp_cvar_results = block_g_optimization.run(
                     valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark
                 )
-                st.write("Optimization results for top portfolios.")
 
             with st.container():
                 st.subheader("Block H – Complete Portfolio Construction")
@@ -105,7 +107,7 @@ if run_analysis:
                 )
 
             with st.container():
-                st.subheader("Block I – Performance Analysis & Reporting")
+                st.subheader("Block I – Performance Analysis")
                 block_i_performance_analysis.run(
                     best_portfolio, returns_pivot_stocks, returns_benchmark,
                     config.rf, config.A, config.total_capital,
@@ -114,11 +116,12 @@ if run_analysis:
                 )
 
             with st.container():
-                st.subheader("Block J – Multi-Layer Stress Testing")
+                st.subheader("Block J – Stress Testing")
                 block_j_stress_testing.run(
                     best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
                 )
 
             st.success("All blocks completed successfully.")
+
         except Exception as e:
             st.error(f"Pipeline error: {str(e)}")
