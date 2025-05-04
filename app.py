@@ -16,35 +16,36 @@ from utils import (
     block_j_stress_testing,
 )
 
-# --- Load valid tickers from file ---
+# --- Load valid tickers ---
 with open("utils/valid_tickers.txt", "r") as f:
     valid_tickers = sorted([line.strip() for line in f if line.strip()])
 
-# --- App Config ---
+# --- App UI Config ---
 st.set_page_config(page_title="Institutional Portfolio Optimization", layout="wide")
 st.title("Institutional Portfolio Optimization Platform")
 
-# --- Sidebar Inputs ---
+# --- Sidebar: User Configuration ---
 st.sidebar.header("User Configuration")
 
-# Safely set default tickers
+# Ticker chọn sẵn
 default_tickers = [x for x in ["VNM", "FPT", "MWG"] if x in valid_tickers]
-tickers_user = st.sidebar.multiselect(
-    "Chọn mã cổ phiếu", options=valid_tickers, default=default_tickers
-)
+tickers_user = st.sidebar.multiselect("Chọn mã cổ phiếu", options=valid_tickers, default=default_tickers)
 
-# Safely set default benchmark
+# Benchmark
 default_benchmark = "VNINDEX" if "VNINDEX" in valid_tickers else valid_tickers[0]
 benchmark_user = st.sidebar.selectbox("Chọn Benchmark", options=valid_tickers, index=valid_tickers.index(default_benchmark))
 
+# Các thông số khác
 start_user = st.sidebar.date_input("Start Date", value=datetime.date(2020, 1, 1))
 end_user = st.sidebar.date_input("End Date", value=datetime.date.today())
 rf_user = st.sidebar.number_input("Annual Risk-Free Rate (%)", value=9.0) / 100
 capital_user = st.sidebar.number_input("Total Capital (VND)", value=750_000_000)
 A_user = st.sidebar.slider("Risk Aversion Coefficient (A)", min_value=1, max_value=40, value=5)
+
+# Run button
 run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
-# --- Overwrite Config ---
+# --- Ghi đè config ---
 config.tickers = tickers_user
 config.benchmark_symbol = benchmark_user
 config.start_date = pd.to_datetime(start_user)
@@ -54,9 +55,9 @@ config.rf = rf_user / 12
 config.total_capital = capital_user
 config.A = A_user
 
-# --- Main Execution ---
+# --- Main Execution Pipeline ---
 if run_analysis:
-    with st.spinner("Running full optimization pipeline..."):
+    with st.spinner("Đang thực hiện tối ưu hóa danh mục..."):
         try:
             data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
                 config.tickers, config.benchmark_symbol, config.start_date, config.end_date
@@ -85,7 +86,7 @@ if run_analysis:
                 best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
             )
 
-            st.success("Portfolio optimization completed successfully.")
+            st.success("Hoàn tất tối ưu hóa danh mục!")
 
         except Exception as e:
             st.error(f"Pipeline execution failed: {str(e)}")
