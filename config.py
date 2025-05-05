@@ -1,17 +1,21 @@
-# utils/config.py
+# --- Global Config for Portfolio Optimization System ---
 
-# --- Stock selection ---
+# User-selected stock tickers
 tickers = []
-benchmark_symbol = "VNINDEX"
 
-# --- Time window ---
+# Benchmark ticker (e.g., VNINDEX)
+benchmark_symbol = None
+
+# Time range
 start_date = None
 end_date = None
 
-# --- Risk-free rate ---
-rf_annual = 9.0  # % annual
-rf = rf_annual / 12 / 100  # monthly rate (as decimal)
+# Risk-free rate
+rf_annual = 9.0  # Annual risk-free rate in %
+rf = rf_annual / 12 / 100  # Monthly risk-free rate in decimal
 
-# --- Portfolio parameters ---
-total_capital = 750_000_000  # in VND
-A = 15  # risk aversion coefficient
+# Investment capital (in VND)
+total_capital = 750_000_000
+
+# Risk aversion coefficient (A)
+A = 15
