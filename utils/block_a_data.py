@@ -23,6 +23,7 @@ def run(tickers, benchmark_symbol, start_date, end_date):
             df.set_index('time', inplace=True)
             df = df[['open', 'high', 'low', 'close', 'volume']]
             df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+            df['Ticker'] = ticker
             return df
         except Exception as e:
             warnings.warn(f"Error loading {ticker}: {e}")
@@ -37,7 +38,8 @@ def run(tickers, benchmark_symbol, start_date, end_date):
             df_monthly = get_first_trading_day(df)
             df_monthly['Ticker'] = ticker
             df_monthly['time'] = pd.to_datetime(df_monthly.index)
-            stock_data.append(df_monthly.reset_index(drop=True))
+            df_monthly.reset_index(drop=True, inplace=True)
+            stock_data.append(df_monthly)
         return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
 
     def compute_monthly_return(df):
