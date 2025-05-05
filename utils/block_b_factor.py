@@ -138,3 +138,4 @@ def run(data_stocks, returns_benchmark):
     st.pyplot(fig)
 
     return selected_tickers, selected_combinations, latest_data, factor_cols
+
