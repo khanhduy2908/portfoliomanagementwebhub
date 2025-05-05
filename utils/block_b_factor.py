@@ -48,7 +48,7 @@ def run(data_stocks, returns_benchmark):
         if factor_data:
             return pd.concat(factor_data, ignore_index=True)
         else:
-            return pd.DataFrame(), [], pd.DataFrame()
+            return pd.DataFrame()
 
     ranking_df = compute_factors(data_stocks, returns_benchmark)
     if ranking_df.empty:
@@ -57,7 +57,12 @@ def run(data_stocks, returns_benchmark):
     latest_month = ranking_df['time'].max()
     latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
 
-    factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
+    base_factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
+    factor_cols = [col for col in base_factor_cols if col in latest_data.columns]
+
+    if not factor_cols:
+        raise ValueError("No valid factor columns found in latest_data.")
+
     scaler = StandardScaler()
     try:
         scaled_values = scaler.fit_transform(latest_data[factor_cols])
@@ -81,13 +86,12 @@ def run(data_stocks, returns_benchmark):
 
         weights /= np.sum(weights)
 
-        score = (
-            weights[0] * latest_data['Return_S'] +
-            weights[2] * latest_data['Liquidity_S'] +
-            weights[3] * latest_data['Momentum_S'] -
-            weights[1] * latest_data['Volatility_S'] -
-            weights[4] * latest_data['Beta_S']
-        )
+        score = 0
+        if 'Return_S' in latest_data.columns: score += weights[0] * latest_data['Return_S']
+        if 'Liquidity_S' in latest_data.columns: score += weights[2] * latest_data['Liquidity_S']
+        if 'Momentum_S' in latest_data.columns: score += weights[3] * latest_data['Momentum_S']
+        if 'Volatility_S' in latest_data.columns: score -= weights[1] * latest_data['Volatility_S']
+        if 'Beta_S' in latest_data.columns: score -= weights[4] * latest_data['Beta_S']
 
         latest_data['Score'] = score
         return latest_data.nlargest(5, 'Score')['Return'].mean()
@@ -99,16 +103,17 @@ def run(data_stocks, returns_benchmark):
     w_arr = np.array(list(w_opt.values()))
     w_arr /= w_arr.sum()
 
-    latest_data['Score'] = (
-        w_arr[0] * latest_data['Return_S'] +
-        w_arr[2] * latest_data['Liquidity_S'] +
-        w_arr[3] * latest_data['Momentum_S'] -
-        w_arr[1] * latest_data['Volatility_S'] -
-        w_arr[4] * latest_data['Beta_S']
-    )
+    score = 0
+    if 'Return_S' in latest_data.columns: score += w_arr[0] * latest_data['Return_S']
+    if 'Liquidity_S' in latest_data.columns: score += w_arr[2] * latest_data['Liquidity_S']
+    if 'Momentum_S' in latest_data.columns: score += w_arr[3] * latest_data['Momentum_S']
+    if 'Volatility_S' in latest_data.columns: score -= w_arr[1] * latest_data['Volatility_S']
+    if 'Beta_S' in latest_data.columns: score -= w_arr[4] * latest_data['Beta_S']
+
+    latest_data['Score'] = score
     latest_data['Rank'] = latest_data['Score'].rank(ascending=False)
 
-    features_for_cluster = [f + '_S' for f in factor_cols]
+    features_for_cluster = [f + '_S' for f in factor_cols if f + '_S' in latest_data.columns]
     kmeans = KMeans(n_clusters=3, n_init=10, random_state=42)
     latest_data['Cluster'] = kmeans.fit_predict(latest_data[features_for_cluster])
 
