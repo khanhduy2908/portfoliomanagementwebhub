@@ -17,7 +17,7 @@ def corr_to_dist(corr):
     return np.sqrt(0.5 * (1 - corr))
 
 def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark):
-    print("📌 Block G: Portfolio Optimization (HRP + Soft CVaR)...")
+    print("Block G: Portfolio Optimization (HRP + Soft CVaR)...")
 
     benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
     hrp_cvar_results = []
@@ -78,7 +78,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                     continue
 
             if not success or w.value is None:
-                print(f"❌ {combo}: Optimization failed.")
+                print(f"{combo}: Optimization failed.")
                 continue
 
             w_opt = w.value
