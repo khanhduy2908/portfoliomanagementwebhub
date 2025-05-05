@@ -1,38 +1,17 @@
-tickers = ["VNM", "FPT", "MWG", "VCB", "REE"]
+# utils/config.py
+
+# --- Stock selection ---
+tickers = []
 benchmark_symbol = "VNINDEX"
-start_date = "2020-01-01"
-end_date = None  # If None, will use current date
-rf_annual = 9  # Annual risk-free rate (%)
-rf = rf_annual / 12 / 100  # Monthly risk-free rate
-total_capital = 750_000_000  # Total investment capital (VND)
-risk_aversion = 5  # Coefficient of risk aversion (A)
 
-# --- Portfolio Constraints ---
-weight_bounds = (0, 0.4)  # Weight bounds per stock
-max_assets = 5
+# --- Time window ---
+start_date = None
+end_date = None
 
-# --- Forecast Model Settings ---
-tabnet_params = {
-    "n_d": 8,
-    "n_a": 8,
-    "n_steps": 3,
-    "gamma": 1.3,
-    "lambda_sparse": 1e-4,
-    "optimizer_fn": "adam",
-    "scheduler_params": {"mode": "min", "patience": 5, "min_lr": 1e-5},
-    "verbose": 0
-}
-forecast_horizon = 1  # Forecast horizon (months)
+# --- Risk-free rate ---
+rf_annual = 9.0  # % annual
+rf = rf_annual / 12 / 100  # monthly rate (as decimal)
 
-feature_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
-rolling_window = 12  # Rolling window length (months)
-LOOKBACK_WINDOW = 12  # Used in Block F (walkforward backtest)
-
-# --- Optimization Parameters ---
-SEED = 42
-N_SIMULATIONS = 10000
-CVaR_ALPHA = 0.95
-LAMBDA_CVaR = 10
-BETA_L2 = 0.1
-CVaR_SOFT_LIMIT = 10  # %
-SOLVERS = ["ECOS", "SCS"]
+# --- Portfolio parameters ---
+total_capital = 750_000_000  # in VND
+A = 15  # risk aversion coefficient
