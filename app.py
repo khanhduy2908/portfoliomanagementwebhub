@@ -28,7 +28,7 @@ st.title("Institutional Portfolio Optimization Platform")
 st.sidebar.header("User Configuration")
 
 # Default tickers
-default_tickers = [x for x in ["VNM", "FPT", "MWG"] if x in valid_tickers]
+default_tickers = [x for x in ["VNM", "FPT", "MWG", "REE", "VCB"] if x in valid_tickers]
 tickers_user = st.sidebar.multiselect("Select Stock Tickers", options=valid_tickers, default=default_tickers)
 
 # Benchmark
