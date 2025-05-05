@@ -65,36 +65,44 @@ if not config.tickers or config.benchmark_symbol is None:
     
 # --- Main Execution Flow ---
 if run_analysis:
-    with st.spinner("Đang chạy tối ưu hóa danh mục..."):
+    with st.spinner("Running portfolio optimization..."):
         try:
             # A
             data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
                 config.tickers, config.benchmark_symbol, config.start_date, config.end_date
             )
+            st.success("Block A – Data loading and monthly return calculation completed.")
 
             # B
             selected_tickers, selected_combinations, latest_data, ranking_df = block_b_factor.run(data_stocks, returns_benchmark)
+            st.success("Block B – Factor-based stock ranking completed.")
 
             # C
             cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
+            st.success("Block C – Covariance matrix estimation completed.")
 
             # D
             adj_returns_combinations, model_store, features_df = block_d_forecast.run(data_stocks, selected_tickers, selected_combinations)
+            st.success("Block D – Return forecasting using machine learning completed.")
 
             # E
             valid_combinations = block_e_feasibility.run(adj_returns_combinations, cov_matrix_dict)
+            st.success("Block E – Portfolio feasibility check completed.")
 
             # F
             walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df)
+            st.success("Block F – Forecast model backtesting completed.")
 
             # G
             hrp_cvar_results = block_g_optimization.run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark)
+            st.success("Block G – Portfolio optimization with HRP and CVaR completed.")
 
             # H
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio = block_h_complete_portfolio.run(
                 hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
                 config.rf, config.A, config.total_capital
             )
+            st.success("Block H – Complete portfolio construction completed.")
 
             # I
             block_i_performance_analysis.run(
@@ -103,12 +111,14 @@ if run_analysis:
                 data_stocks, data_benchmark, config.benchmark_symbol,
                 weights, tickers_portfolio, config.start_date, config.end_date
             )
+            st.success("Block I – Portfolio performance evaluation completed.")
 
             # E1
             block_e1_visualization.run(
                 returns_pivot_stocks, tickers_portfolio, config.rf,
                 config.start_date, config.end_date
             )
+            st.success("Block I1 – Historical performance visualization completed.")
 
             # E2
             block_e2_visualization.run(
@@ -116,13 +126,15 @@ if run_analysis:
                 weights, tickers_portfolio,
                 config.start_date, config.end_date, config.rf
             )
+            st.success("Block I2 – Benchmark comparison visualization completed.")
 
             # J
             block_j_stress_testing.run(
                 best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
             )
+            st.success("Block J – Multi-layer stress testing completed.")
 
-            st.success("✅ Tối ưu hóa danh mục hoàn tất!")
+            st.success("All portfolio optimization blocks completed successfully.")
 
         except Exception as e:
-            st.error(f"❌ Lỗi khi thực thi pipeline: {str(e)}")
+            st.error(f"Pipeline execution failed: {str(e)}")
