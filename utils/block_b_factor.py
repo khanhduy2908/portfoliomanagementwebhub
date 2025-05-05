@@ -1,40 +1,50 @@
-def run(data_stocks, returns_benchmark):
-    import pandas as pd
-    import numpy as np
-    from sklearn.linear_model import LinearRegression
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.cluster import KMeans
-    import optuna
-    import warnings
+# --- BLOCK B: Factor-Based Stock Ranking ---
 
-    def compute_factors(data_stocks, returns_benchmark):
-        factor_data = []
-        for ticker in data_stocks['Ticker'].unique():
-            df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
-            if df.shape[0] < 6:
-                continue
-            df['Return'] = df['Close'].pct_change() * 100
-            df['Volatility'] = df['Close'].rolling(window=3).std()
-            df['Liquidity'] = df['Volume'].rolling(window=3).mean()
-            df['Momentum'] = df['Close'].pct_change(periods=3) * 100
-            df.dropna(inplace=True)
+import pandas as pd
+import numpy as np
+import warnings
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+import optuna
+from itertools import combinations
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-            merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
-                              left_on='time', right_index=True, how='inner')
 
-            if len(merged) < 10:
-                continue
+def compute_factors(data_stocks, returns_benchmark):
+    factor_data = []
+    for ticker in data_stocks['Ticker'].unique():
+        df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
+        if df.shape[0] < 6:
+            warnings.warn(f"{ticker}: insufficient data.")
+            continue
 
-            X = merged[['Benchmark_Return']]
-            y = merged['Return']
-            model = LinearRegression().fit(X, y)
-            beta = model.coef_[0]
-            df = df[df['time'].isin(merged['time'])]
-            df['Beta'] = beta
-            factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
+        df['Return'] = df['Close'].pct_change() * 100
+        df['Volatility'] = df['Close'].rolling(window=3).std()
+        df['Liquidity'] = df['Volume'].rolling(window=3).mean()
+        df['Momentum'] = df['Close'].pct_change(periods=3) * 100
+        df.dropna(inplace=True)
 
-        return pd.concat(factor_data, ignore_index=True)
+        merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
+                          left_on='time', right_index=True, how='inner')
 
+        if len(merged) < 10:
+            warnings.warn(f"{ticker}: insufficient data to compute beta.")
+            continue
+
+        X = merged[['Benchmark_Return']]
+        y = merged['Return']
+        model = LinearRegression().fit(X, y)
+        beta = model.coef_[0]
+        df = df[df['time'].isin(merged['time'])]
+        df['Beta'] = beta
+        factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
+
+    return pd.concat(factor_data, ignore_index=True)
+
+
+def run_block_b(data_stocks, returns_benchmark):
     ranking_df = compute_factors(data_stocks, returns_benchmark)
     latest_month = ranking_df['time'].max()
     latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
@@ -56,6 +66,7 @@ def run(data_stocks, returns_benchmark):
         if np.sum(weights) == 0:
             return -1e9
         weights /= np.sum(weights)
+
         score = (
             weights[0] * latest_data['Return_S'] +
             weights[2] * latest_data['Liquidity_S'] +
@@ -63,11 +74,13 @@ def run(data_stocks, returns_benchmark):
             weights[1] * latest_data['Volatility_S'] -
             weights[4] * latest_data['Beta_S']
         )
+
         latest_data['Score'] = score
         return latest_data.nlargest(5, 'Score')['Return'].mean()
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=50)
+
     w_opt = study.best_params
     w_arr = np.array(list(w_opt.values()))
     w_arr /= w_arr.sum()
@@ -94,5 +107,16 @@ def run(data_stocks, returns_benchmark):
         .reset_index(drop=True)
     )
     selected_tickers = selected_df['Ticker'].tolist()
+    selected_combinations = ['-'.join(c) for c in combinations(selected_tickers, 3)]
 
-    return selected_df, selected_tickers
+    # Optional: plot
+    plt.figure(figsize=(10, 5))
+    sns.barplot(data=selected_df, x='Ticker', y='Score', palette='Blues_d', edgecolor='black')
+    plt.title("Top 5 Stocks by Composite Score", fontsize=14)
+    plt.xlabel("Ticker")
+    plt.ylabel("Composite Score")
+    plt.tight_layout()
+    plt.grid(False)
+    plt.show()
+
+    return selected_tickers, selected_combinations, latest_data
