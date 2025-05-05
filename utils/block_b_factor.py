@@ -19,7 +19,7 @@ def run(data_stocks, returns_benchmark):
         for ticker in data_stocks['Ticker'].unique():
             df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
             if df.shape[0] < 6:
-                warnings.warn(f"{ticker}: Not enough data.")
+                warnings.warn(f"{ticker}: Không đủ dữ liệu.")
                 continue
 
             df['Return'] = df['Close'].pct_change() * 100
@@ -32,7 +32,7 @@ def run(data_stocks, returns_benchmark):
                               left_on='time', right_index=True, how='inner')
 
             if len(merged) < 10:
-                warnings.warn(f"{ticker}: Not enough data for beta.")
+                warnings.warn(f"{ticker}: Không đủ dữ liệu để tính beta.")
                 continue
 
             X = merged[['Benchmark_Return']]
@@ -52,7 +52,7 @@ def run(data_stocks, returns_benchmark):
 
     ranking_df = compute_factors(data_stocks, returns_benchmark)
     if ranking_df.empty:
-        raise ValueError("No valid stock data after factor construction.")
+        raise ValueError("Không có dữ liệu hợp lệ sau khi tính factor.")
 
     latest_month = ranking_df['time'].max()
     latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
@@ -61,16 +61,15 @@ def run(data_stocks, returns_benchmark):
     factor_cols = [col for col in base_factor_cols if col in latest_data.columns]
 
     if not factor_cols:
-        raise ValueError("No valid factor columns found in latest_data.")
+        raise ValueError("Không có cột factor hợp lệ trong latest_data.")
 
     scaler = StandardScaler()
     try:
         scaled_values = scaler.fit_transform(latest_data[factor_cols])
     except Exception as e:
-        raise ValueError(f"Scaling failed: {e}")
+        raise ValueError(f"Lỗi khi chuẩn hóa dữ liệu: {e}")
 
-    factor_cols_scaled = [f + '_S' for f in factor_cols]
-    scaled_df = pd.DataFrame(scaled_values, columns=factor_cols_scaled)
+    scaled_df = pd.DataFrame(scaled_values, columns=[f + '_S' for f in factor_cols])
     latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
 
     def objective(trial):
@@ -114,7 +113,7 @@ def run(data_stocks, returns_benchmark):
     latest_data['Score'] = score
     latest_data['Rank'] = latest_data['Score'].rank(ascending=False)
 
-    features_for_cluster = [col for col in factor_cols_scaled if col in latest_data.columns]
+    features_for_cluster = [f + '_S' for f in factor_cols if f + '_S' in latest_data.columns]
     kmeans = KMeans(n_clusters=3, n_init=10, random_state=42)
     latest_data['Cluster'] = kmeans.fit_predict(latest_data[features_for_cluster])
 
@@ -130,12 +129,12 @@ def run(data_stocks, returns_benchmark):
     selected_tickers = selected_df['Ticker'].tolist()
     selected_combinations = ['-'.join(c) for c in combinations(selected_tickers, 3)]
 
-    st.subheader("Top 5 Stocks by Factor Ranking")
+    st.subheader("Top 5 Cổ phiếu theo xếp hạng tổng hợp")
     fig, ax = plt.subplots(figsize=(10, 5))
     sns.barplot(data=selected_df, x='Ticker', y='Score', palette='Blues_d', edgecolor='black', ax=ax)
-    ax.set_title("Top 5 Stocks by Composite Score", fontsize=14)
+    ax.set_title("Top 5 Cổ phiếu theo Composite Score", fontsize=14)
     ax.set_xlabel("Ticker")
     ax.set_ylabel("Composite Score")
     st.pyplot(fig)
 
-    return selected_tickers, selected_combinations, latest_data, factor_cols_scaled
+    return selected_tickers, selected_combinations, latest_data, factor_cols
