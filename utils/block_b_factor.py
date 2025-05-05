@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import optuna
 import warnings
-import utils.config as config
+import config
 
 # --- Tính các yếu tố cơ bản ---
 def compute_factors(data_stocks, returns_benchmark):
