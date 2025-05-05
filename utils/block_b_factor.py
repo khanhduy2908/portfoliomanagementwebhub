@@ -69,7 +69,8 @@ def run(data_stocks, returns_benchmark):
     except Exception as e:
         raise ValueError(f"Scaling failed: {e}")
 
-    scaled_df = pd.DataFrame(scaled_values, columns=[f + '_S' for f in factor_cols])
+    factor_cols_scaled = [f + '_S' for f in factor_cols]
+    scaled_df = pd.DataFrame(scaled_values, columns=factor_cols_scaled)
     latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
 
     def objective(trial):
@@ -113,7 +114,7 @@ def run(data_stocks, returns_benchmark):
     latest_data['Score'] = score
     latest_data['Rank'] = latest_data['Score'].rank(ascending=False)
 
-    features_for_cluster = [f + '_S' for f in factor_cols if f + '_S' in latest_data.columns]
+    features_for_cluster = [col for col in factor_cols_scaled if col in latest_data.columns]
     kmeans = KMeans(n_clusters=3, n_init=10, random_state=42)
     latest_data['Cluster'] = kmeans.fit_predict(latest_data[features_for_cluster])
 
@@ -137,5 +138,4 @@ def run(data_stocks, returns_benchmark):
     ax.set_ylabel("Composite Score")
     st.pyplot(fig)
 
-    return selected_tickers, selected_combinations, latest_data, factor_cols
-
+    return selected_tickers, selected_combinations, latest_data, factor_cols_scaled
