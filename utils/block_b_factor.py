@@ -10,6 +10,8 @@ from itertools import combinations
 import streamlit as st
 import warnings
 
+# --- BLOCK B: Factor Construction and Portfolio Filtering ---
+
 def run(data_stocks, returns_benchmark):
     def compute_factors(data_stocks, returns_benchmark):
         factor_data = []
@@ -39,17 +41,29 @@ def run(data_stocks, returns_benchmark):
             beta = model.coef_[0]
             df = df[df['time'].isin(merged['time'])]
             df['Beta'] = beta
-            factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
 
-        return pd.concat(factor_data, ignore_index=True)
+            df_final = df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']].copy()
+            factor_data.append(df_final)
+
+        if factor_data:
+            return pd.concat(factor_data, ignore_index=True)
+        else:
+            return pd.DataFrame()
 
     ranking_df = compute_factors(data_stocks, returns_benchmark)
+    if ranking_df.empty:
+        raise ValueError("No valid stock data after factor construction.")
+
     latest_month = ranking_df['time'].max()
     latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
 
-    scaler = StandardScaler()
     factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
-    scaled_values = scaler.fit_transform(latest_data[factor_cols])
+    scaler = StandardScaler()
+    try:
+        scaled_values = scaler.fit_transform(latest_data[factor_cols])
+    except Exception as e:
+        raise ValueError(f"Scaling failed: {e}")
+
     scaled_df = pd.DataFrame(scaled_values, columns=[f + '_S' for f in factor_cols])
     latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
 
@@ -118,4 +132,4 @@ def run(data_stocks, returns_benchmark):
     ax.set_ylabel("Composite Score")
     st.pyplot(fig)
 
-    return selected_tickers, selected_combinations, latest_data, ranking_df
+    return selected_tickers, selected_combinations, latest_data
