@@ -10,7 +10,6 @@ from itertools import combinations
 import streamlit as st
 import warnings
 
-
 def run(data_stocks, returns_benchmark):
     def compute_factors(data_stocks, returns_benchmark):
         factor_data = []
@@ -119,4 +118,4 @@ def run(data_stocks, returns_benchmark):
     ax.set_ylabel("Composite Score")
     st.pyplot(fig)
 
-    return selected_tickers, selected_combinations, latest_data
+    return selected_tickers, selected_combinations, latest_data, ranking_df
