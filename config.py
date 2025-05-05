@@ -26,5 +26,5 @@ tabnet_params = {
     "verbose": 0
 }
 forecast_horizon = 1
-feature_cols = ['Volatility', 'Liquidity', 'Momentum', 'Beta']
+feature_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
 LOOKBACK_WINDOW = 12 
