@@ -1,3 +1,5 @@
+# utils/block_f_backtest.py
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -5,34 +7,31 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from pytorch_tabnet.tab_model import TabNetRegressor
 import matplotlib.pyplot as plt
 import seaborn as sns
-import joblib
 from collections import defaultdict
+import joblib
+import streamlit as st
 
-# --- BLOCK F: Walkforward Backtest Evaluation ---
+# --- CONFIG ---
+lookback = 12
+n_splits = 5
+min_samples = 100
 
 def run(valid_combinations, features_df, factor_cols):
-    min_samples = 100
-    n_splits = 5
-    lookback = 12
-
-    eval_logs = []
-    error_by_stock = defaultdict(list)
     walkforward_results = []
+    error_by_stock = defaultdict(list)
+
+    st.markdown("### 📉 Walkforward Backtest (Model Stability Evaluation)")
 
     for combo in valid_combinations:
         subset = combo.split('-')
         df_combo = features_df[features_df['Ticker'].isin(subset)].copy()
 
-        # --- Build time-series dataset ---
+        # --- Prepare Time Series Dataset ---
         X_all, y_all, meta = [], [], []
         for ticker in subset:
             df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
             for i in range(lookback, len(df_ticker)):
-                try:
-                    window = df_ticker[factor_cols].iloc[i - lookback:i].values.flatten()
-                except KeyError as e:
-                    print(f"{combo} - Missing columns: {e}. Skipping ticker {ticker}.")
-                    continue
+                window = df_ticker[factor_cols].iloc[i - lookback:i].values.flatten()
                 target = df_ticker['Return_Close'].iloc[i]
                 ts = df_ticker['time'].iloc[i]
                 X_all.append(window)
@@ -44,14 +43,12 @@ def run(valid_combinations, features_df, factor_cols):
         meta_df = pd.DataFrame(meta)
 
         if len(X_all) < min_samples:
-            print(f"{combo}: Not enough samples ({len(X_all)}). Skipping.")
+            st.warning(f"⚠️ `{combo}`: Not enough samples ({len(X_all)}). Skipping.")
             continue
 
-        # --- Scale features ---
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X_all)
 
-        # --- Walkforward split (expanding window) ---
         split_size = int(len(X_scaled) / (n_splits + 1))
         maes, r2s, accs, dir_accs = [], [], [], []
         preds_all, y_all_vals, tickers_all = [], [], []
@@ -71,17 +68,19 @@ def run(valid_combinations, features_df, factor_cols):
 
             model = TabNetRegressor(seed=42)
             model.fit(
-                X_train=X_train, y_train=y_train,
+                X_train, y_train,
                 eval_set=[(X_test, y_test)],
                 eval_metric=['mae'],
-                max_epochs=100, patience=10,
-                batch_size=256, virtual_batch_size=128
+                max_epochs=100,
+                patience=10,
+                batch_size=256,
+                virtual_batch_size=128
             )
 
             preds = model.predict(X_test).squeeze()
             y_true = y_test.squeeze()
 
-            # --- Metrics ---
+            # Metrics
             mae = mean_absolute_error(y_true, preds)
             r2 = r2_score(y_true, preds)
             acc = (np.sign(y_true) == np.sign(preds)).mean()
@@ -96,9 +95,8 @@ def run(valid_combinations, features_df, factor_cols):
             y_all_vals.extend(y_true)
             tickers_all.extend(test_meta['ticker'].values)
 
-            joblib.dump(model, f"model_{combo}_fold{i}.pkl")
+            joblib.dump(model, f"models/model_{combo}_fold{i}.pkl")
 
-        # --- Portfolio result summary ---
         walkforward_results.append({
             'Portfolio': combo,
             'MAE': np.mean(maes),
@@ -107,7 +105,7 @@ def run(valid_combinations, features_df, factor_cols):
             'Directional Accuracy': np.mean(dir_accs)
         })
 
-        # --- Stock-level error ---
+        # Stock-level error tracking
         error_df = pd.DataFrame({
             'Ticker': tickers_all,
             'True': y_all_vals,
@@ -117,23 +115,17 @@ def run(valid_combinations, features_df, factor_cols):
         stock_error = error_df.groupby('Ticker')['Error'].mean().sort_values(ascending=False)
         error_by_stock[combo] = stock_error
 
-    # --- Walkforward summary ---
     walkforward_df = pd.DataFrame(walkforward_results).sort_values('MAE')
-    print("\nWalkforward Evaluation Summary:")
-    print(walkforward_df.round(4))
+    st.dataframe(walkforward_df.round(4), use_container_width=True)
 
-    # --- Visualize metrics ---
+    # Visualization: Top metrics
     for metric in ['MAE', 'R2', 'Accuracy']:
-        plt.figure(figsize=(10, 6))
-        sns.barplot(x='Portfolio', y=metric, data=walkforward_df)
+        plt.figure(figsize=(10, 5))
+        sns.barplot(x='Portfolio', y=metric, data=walkforward_df, palette='crest')
         plt.title(f"{metric} across Portfolios")
+        plt.xticks(rotation=45)
         plt.tight_layout()
-        plt.grid(False)
-        plt.show()
-
-    # --- Best portfolio stock-level error ---
-    best_combo = walkforward_df.iloc[0]['Portfolio']
-    print(f"\nStock-level errors for best portfolio: {best_combo}")
-    print(error_by_stock[best_combo].round(4))
+        st.pyplot(plt.gcf())
+        plt.close()
 
     return walkforward_df, error_by_stock
