@@ -1,50 +1,49 @@
-# --- BLOCK B: Factor-Based Stock Ranking ---
-
-import pandas as pd
-import numpy as np
-import warnings
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import optuna
-from itertools import combinations
-import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
+from itertools import combinations
+import streamlit as st
+import warnings
 
 
-def compute_factors(data_stocks, returns_benchmark):
-    factor_data = []
-    for ticker in data_stocks['Ticker'].unique():
-        df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
-        if df.shape[0] < 6:
-            warnings.warn(f"{ticker}: insufficient data.")
-            continue
+def run(data_stocks, returns_benchmark):
+    def compute_factors(data_stocks, returns_benchmark):
+        factor_data = []
 
-        df['Return'] = df['Close'].pct_change() * 100
-        df['Volatility'] = df['Close'].rolling(window=3).std()
-        df['Liquidity'] = df['Volume'].rolling(window=3).mean()
-        df['Momentum'] = df['Close'].pct_change(periods=3) * 100
-        df.dropna(inplace=True)
+        for ticker in data_stocks['Ticker'].unique():
+            df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
+            if df.shape[0] < 6:
+                warnings.warn(f"{ticker}: Not enough data.")
+                continue
 
-        merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
-                          left_on='time', right_index=True, how='inner')
+            df['Return'] = df['Close'].pct_change() * 100
+            df['Volatility'] = df['Close'].rolling(window=3).std()
+            df['Liquidity'] = df['Volume'].rolling(window=3).mean()
+            df['Momentum'] = df['Close'].pct_change(periods=3) * 100
+            df.dropna(inplace=True)
 
-        if len(merged) < 10:
-            warnings.warn(f"{ticker}: insufficient data to compute beta.")
-            continue
+            merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
+                              left_on='time', right_index=True, how='inner')
 
-        X = merged[['Benchmark_Return']]
-        y = merged['Return']
-        model = LinearRegression().fit(X, y)
-        beta = model.coef_[0]
-        df = df[df['time'].isin(merged['time'])]
-        df['Beta'] = beta
-        factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
+            if len(merged) < 10:
+                warnings.warn(f"{ticker}: Not enough data for beta.")
+                continue
 
-    return pd.concat(factor_data, ignore_index=True)
+            X = merged[['Benchmark_Return']]
+            y = merged['Return']
+            model = LinearRegression().fit(X, y)
+            beta = model.coef_[0]
+            df = df[df['time'].isin(merged['time'])]
+            df['Beta'] = beta
+            factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
 
+        return pd.concat(factor_data, ignore_index=True)
 
-def run_block_b(data_stocks, returns_benchmark):
     ranking_df = compute_factors(data_stocks, returns_benchmark)
     latest_month = ranking_df['time'].max()
     latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
@@ -63,8 +62,10 @@ def run_block_b(data_stocks, returns_benchmark):
             trial.suggest_float('w_mom', 0, 1),
             trial.suggest_float('w_beta', 0, 1)
         ])
+
         if np.sum(weights) == 0:
             return -1e9
+
         weights /= np.sum(weights)
 
         score = (
@@ -106,17 +107,16 @@ def run_block_b(data_stocks, returns_benchmark):
         .head(5)
         .reset_index(drop=True)
     )
+
     selected_tickers = selected_df['Ticker'].tolist()
     selected_combinations = ['-'.join(c) for c in combinations(selected_tickers, 3)]
 
-    # Optional: plot
-    plt.figure(figsize=(10, 5))
-    sns.barplot(data=selected_df, x='Ticker', y='Score', palette='Blues_d', edgecolor='black')
-    plt.title("Top 5 Stocks by Composite Score", fontsize=14)
-    plt.xlabel("Ticker")
-    plt.ylabel("Composite Score")
-    plt.tight_layout()
-    plt.grid(False)
-    plt.show()
+    st.subheader("Top 5 Stocks by Factor Ranking")
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.barplot(data=selected_df, x='Ticker', y='Score', palette='Blues_d', edgecolor='black', ax=ax)
+    ax.set_title("Top 5 Stocks by Composite Score", fontsize=14)
+    ax.set_xlabel("Ticker")
+    ax.set_ylabel("Composite Score")
+    st.pyplot(fig)
 
     return selected_tickers, selected_combinations, latest_data
