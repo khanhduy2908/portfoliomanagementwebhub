@@ -1,83 +1,58 @@
-def run(weights, tickers_portfolio, returns_pivot_stocks, returns_benchmark, rf):
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    from sklearn.linear_model import LinearRegression
+### BLOCK E: Feasibility Check of Portfolios (Professional Implementation)
 
-    portfolio_weights = np.array(weights)
-    benchmark_returns = returns_benchmark['Benchmark_Return']
-    returns_portfolio_df = returns_pivot_stocks[tickers_portfolio].copy()
-    
-    # Đồng bộ thời gian
-    aligned_index = returns_portfolio_df.index.intersection(benchmark_returns.index)
-    returns_portfolio_df = returns_portfolio_df.loc[aligned_index]
-    benchmark_returns = benchmark_returns.loc[aligned_index]
-    
-    # Tính lợi suất danh mục
-    portfolio_returns = returns_portfolio_df @ portfolio_weights
+```python
+import numpy as np
+import pandas as pd
+from numpy.linalg import LinAlgError
 
-    # Tích lũy lợi suất
-    cumulative_portfolio = (1 + portfolio_returns / 100).cumprod()
-    cumulative_benchmark = (1 + benchmark_returns / 100).cumprod()
+# --- Initialize Valid Portfolio List ---
+valid_combinations = []
+invalid_log = []
 
-    cumulative_portfolio /= cumulative_portfolio.iloc[0]
-    cumulative_benchmark /= cumulative_benchmark.iloc[0]
+# --- Run Feasibility Checks ---
+for combo in adj_returns_combinations.keys():
+    tickers = combo.split('-')
 
-    # Các chỉ số đánh giá hiệu suất
-    mean_return = portfolio_returns.mean()
-    volatility = portfolio_returns.std()
-    sharpe = (mean_return - rf * 100) / volatility if volatility > 0 else np.nan
+    try:
+        # Retrieve expected return vector
+        mu = np.array([adj_returns_combinations[combo][t] for t in tickers]) / 100
 
-    downside = portfolio_returns[portfolio_returns < rf * 100]
-    sortino = (mean_return - rf * 100) / downside.std() if not downside.empty else np.nan
+        # Retrieve covariance matrix
+        cov_df = cov_matrix_dict.get(combo)
+        if cov_df is None:
+            raise ValueError("Missing covariance matrix")
 
-    drawdown = cumulative_portfolio / cumulative_portfolio.cummax() - 1
-    max_drawdown = drawdown.min()
+        cov = cov_df.loc[tickers, tickers].values
 
-    years = (cumulative_portfolio.index[-1] - cumulative_portfolio.index[0]).days / 365.25
-    cagr = cumulative_portfolio.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
-    calmar = cagr / abs(max_drawdown) if max_drawdown < 0 else np.nan
+        # Check for NaN, Inf, and negative eigenvalues
+        if np.any(np.isnan(mu)) or np.any(np.isinf(mu)):
+            raise ValueError("Expected returns contain NaN or Inf")
 
-    # Alpha, Beta, Tracking Error, Information Ratio
-    aligned_df = pd.concat([portfolio_returns, benchmark_returns], axis=1).dropna()
-    aligned_df.columns = ['Portfolio', 'Benchmark']
-    X = aligned_df['Benchmark'].values.reshape(-1, 1)
-    y = aligned_df['Portfolio'].values
-    reg = LinearRegression().fit(X, y)
-    alpha = reg.intercept_
-    beta = reg.coef_[0]
-    r_squared = reg.score(X, y)
-    tracking_error = np.std(aligned_df['Portfolio'] - aligned_df['Benchmark'])
-    info_ratio = (mean_return - benchmark_returns.mean()) / tracking_error if tracking_error > 0 else np.nan
+        if np.any(np.isnan(cov)) or np.any(np.isinf(cov)):
+            raise ValueError("Covariance matrix contains NaN or Inf")
 
-    # Bảng tổng hợp
-    summary_df = pd.DataFrame({
-        'Metric': ['Mean Return', 'Volatility', 'Sharpe Ratio', 'Sortino Ratio',
-                   'Max Drawdown', 'CAGR', 'Calmar Ratio'],
-        'Value': [mean_return, volatility, sharpe, sortino,
-                  max_drawdown, cagr, calmar]
-    })
+        if np.all(mu <= 0):
+            raise ValueError("All expected returns are non-positive")
 
-    regression_df = pd.DataFrame({
-        'Metric': ['Alpha', 'Beta', 'R-squared', 'Tracking Error', 'Information Ratio'],
-        'Value': [alpha, beta, r_squared, tracking_error, info_ratio]
-    })
+        eigvals = np.linalg.eigvalsh(cov)
+        if np.any(eigvals < -1e-6):
+            raise ValueError("Covariance matrix is not PSD")
 
-    # Biểu đồ
-    plt.figure(figsize=(12, 5))
-    plt.plot(cumulative_portfolio.index, cumulative_portfolio, label='Portfolio')
-    plt.plot(cumulative_benchmark.index, cumulative_benchmark, label='Benchmark')
-    plt.title("Cumulative Returns (Normalized)")
-    plt.legend()
-    plt.grid(False)
-    plt.tight_layout()
-    plt.show()
+        # If all checks pass, mark as valid
+        valid_combinations.append(combo)
 
-    plt.figure(figsize=(12, 4))
-    plt.fill_between(drawdown.index, drawdown, color='red', alpha=0.3)
-    plt.title("Portfolio Drawdown")
-    plt.tight_layout()
-    plt.grid(False)
-    plt.show()
+    except Exception as e:
+        invalid_log.append((combo, str(e)))
+        continue
 
-    return summary_df.round(4), regression_df.round(4)
+# --- Summary Report ---
+print("\nPortfolio Feasibility Summary")
+print("-------------------------------------")
+print(f"✅ Valid Portfolios: {len(valid_combinations)}")
+print(f"❌ Invalid Portfolios: {len(invalid_log)}")
+
+if invalid_log:
+    print("\nDetails of Invalid Portfolios:")
+    for combo, reason in invalid_log:
+        print(f" - {combo}: {reason}")
+```
