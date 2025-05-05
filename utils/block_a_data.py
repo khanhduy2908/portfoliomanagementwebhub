@@ -5,7 +5,7 @@ import numpy as np
 import warnings
 from itertools import combinations
 from vnstock import Vnstock
-import utils.config as config
+import config
 
 # --- Tải dữ liệu giá ---
 def get_stock_data(ticker, start, end):
