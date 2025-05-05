@@ -28,4 +28,4 @@ tabnet_params = {
 forecast_horizon = 1  # Months to forecast
 
 # --- Evaluation Settings ---
-LOOKBACK_WINDOW = 12 = 12  # Rolling analysis window in months
+LOOKBACK_WINDOW = 12  # Rolling analysis window in months
