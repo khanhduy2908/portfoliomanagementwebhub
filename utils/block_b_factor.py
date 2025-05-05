@@ -48,7 +48,7 @@ def run(data_stocks, returns_benchmark):
         if factor_data:
             return pd.concat(factor_data, ignore_index=True)
         else:
-            return pd.DataFrame()
+            return pd.DataFrame(), [], pd.DataFrame()
 
     ranking_df = compute_factors(data_stocks, returns_benchmark)
     if ranking_df.empty:
@@ -132,4 +132,4 @@ def run(data_stocks, returns_benchmark):
     ax.set_ylabel("Composite Score")
     st.pyplot(fig)
 
-    return selected_tickers, selected_combinations, latest_data
+    return selected_tickers, selected_combinations, latest_data, factor_cols
