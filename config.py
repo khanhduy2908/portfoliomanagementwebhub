@@ -9,7 +9,7 @@ end_date = pd.to_datetime("today")
 rf_annual = 9.0
 rf = rf_annual / 12 / 100
 total_capital = 750_000_000
-A = 5
+A = 15
 
 # --- SYSTEM PARAMETERS ---
 min_return_months = 24
