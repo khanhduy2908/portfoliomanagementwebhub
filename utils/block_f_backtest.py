@@ -11,7 +11,7 @@ import config
 
 # --- BLOCK F: Walkforward Backtest Evaluation ---
 
-def run(valid_combinations, features_df):
+def run(valid_combinations, features_df, factor_cols):
     min_samples = 100
     n_splits = 5
     lookback = config.rolling_window
@@ -29,7 +29,7 @@ def run(valid_combinations, features_df):
         for ticker in subset:
             df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
             for i in range(lookback, len(df_ticker)):
-                window = df_ticker[config.feature_cols].iloc[i - lookback:i].values.flatten()
+                window = df_ticker[factor_cols].iloc[i - lookback:i].values.flatten()
                 target = df_ticker['Return_Close'].iloc[i]
                 ts = df_ticker['time'].iloc[i]
                 X_all.append(window)
