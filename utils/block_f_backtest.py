@@ -10,7 +10,7 @@ from collections import defaultdict
 
 # --- BLOCK F: Walkforward Backtest Evaluation ---
 
-def run(valid_combinations, features_df, feature_cols):
+def run(valid_combinations, features_df, factor_cols):
     min_samples = 100
     n_splits = 5
     lookback = 12
@@ -28,7 +28,11 @@ def run(valid_combinations, features_df, feature_cols):
         for ticker in subset:
             df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
             for i in range(lookback, len(df_ticker)):
-                window = df_ticker[feature_cols].iloc[i - lookback:i].values.flatten()
+                try:
+                    window = df_ticker[factor_cols].iloc[i - lookback:i].values.flatten()
+                except KeyError as e:
+                    print(f"{combo} - Missing columns: {e}. Skipping ticker {ticker}.")
+                    continue
                 target = df_ticker['Return_Close'].iloc[i]
                 ts = df_ticker['time'].iloc[i]
                 X_all.append(window)
