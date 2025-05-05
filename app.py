@@ -58,6 +58,14 @@ config.rf = rf_user / 12
 config.total_capital = capital_user
 config.A = A_user
 
+st.write("DEBUG - Tickers:", config.tickers)
+st.write("DEBUG - Benchmark:", config.benchmark_symbol)
+
+# --- Check input validity ---
+if not config.tickers or config.benchmark_symbol is None:
+    st.error("❌ Bạn phải chọn ít nhất 1 mã cổ phiếu và một mã benchmark.")
+    st.stop()
+    
 # --- Main Execution Flow ---
 if run_analysis:
     with st.spinner("Đang chạy tối ưu hóa danh mục..."):
