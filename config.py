@@ -1,31 +1,36 @@
-import pandas as pd
-
-# --- USER INPUT CONFIGURATION (Overwritten dynamically by app.py) ---
-tickers = ["VNM", "FPT", "MWG", "VCB", "REE"]
+tickers = []
 benchmark_symbol = "VNINDEX"
-start_date = pd.to_datetime("2020-01-01")
-end_date = pd.to_datetime("today")
-
-rf_annual = 9.0
-rf = rf_annual / 12 / 100
+start_date = None
+end_date = None
+rf_annual = 0.09
+rf = 0.0075
 total_capital = 750_000_000
 A = 15
 
-# --- SYSTEM PARAMETERS ---
-min_return_months = 24
-lookback = 12
-min_samples = 100
-confidence_level = 0.95
+CVaR_ALPHA = 0.95
+CVaR_SOFT_LIMIT = 6.5
+Y_MIN = 0.6
+Y_MAX = 0.9
 
-# --- CVaR & Robust Optimization ---
-alpha_cvar = 0.95
-lambda_cvar = 10
-beta_l2 = 0.05
-n_simulations = 30000 
+TABNET_PARAMS = {
+    'seed': 42,
+    'max_epochs': 100,
+    'patience': 10,
+    'batch_size': 256,
+    'virtual_batch_size': 128,
+    'eval_metric': ['mae'],
+}
 
-# --- CAL Line Allocation Constraints ---
-y_min = 0.6
-y_max = 0.9
+STACKING_FOLDS = 5
+LOOKBACK_WINDOW = 12
+MIN_SAMPLE_SIZE = 100
 
-# --- Solver Settings for cvxpy ---
-solvers = ["SCS", "ECOS"]
+L2_PENALTY = 0.01
+LAMBDA_CVAR = 5
+
+MC_SIMULATIONS = 10000
+CONFIDENCE_LEVEL = 0.95
+T_DIST_DF = 4
+INTEREST_RATE_SHOCK = -0.15
+INFLATION_SHOCK = -0.10
+HISTORICAL_SHOCK = -0.25
