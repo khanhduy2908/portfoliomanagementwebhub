@@ -9,13 +9,14 @@ from utils import (
     block_c_covariance,
     block_d_forecast,
     block_e_feasibility,
+    block_e1_asset_bubble,
+    block_e2_vs_benchmark,
     block_f_backtest,
     block_g_optimization,
     block_h_complete_portfolio,
     block_i_performance_analysis,
     block_j_stress_testing,
-    block_e1_visual_asset,
-    block_e2_visual_portfolio
+    config,
 )
 
 # --- Page Configuration ---
