@@ -116,7 +116,7 @@ def run(valid_combinations, features_df):
 
     # --- Walkforward summary ---
     walkforward_df = pd.DataFrame(walkforward_results).sort_values('MAE')
-    print("\n📊 Walkforward Evaluation Summary:")
+    print("\nWalkforward Evaluation Summary:")
     print(walkforward_df.round(4))
 
     # --- Visualize metrics ---
