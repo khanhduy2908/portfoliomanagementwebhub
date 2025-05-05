@@ -37,19 +37,22 @@ def run(tickers, benchmark_symbol, start_date, end_date):
             if df.empty:
                 continue
             df_monthly = get_first_trading_day(df)
+            df_monthly = df_monthly.copy()
+            df_monthly['time'] = pd.to_datetime(df_monthly.index)
+            df_monthly = df_monthly.reset_index(drop=True)
             df_monthly['Ticker'] = ticker
-            stock_data.append(df_monthly.reset_index())
+            stock_data.append(df_monthly)
         return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
 
     data_stocks = load_all_monthly_data(tickers)
     data_benchmark = load_all_monthly_data([benchmark_symbol])
 
     if data_stocks.empty or data_benchmark.empty:
-        raise ValueError("Missing valid stock or benchmark data.")
+        raise ValueError("❌ Không có dữ liệu hợp lệ cho cổ phiếu hoặc benchmark.")
 
     def compute_monthly_return(df):
         if 'Ticker' not in df.columns or 'Close' not in df.columns or 'time' not in df.columns:
-            raise ValueError("Missing necessary columns in stock data.")
+            raise ValueError("❌ Thiếu cột cần thiết trong dữ liệu đầu vào.")
         df = df.sort_values(['Ticker', 'time'])
         df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
         return df.dropna(subset=['Return'])
