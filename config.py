@@ -27,4 +27,4 @@ forecast_horizon = 1  # Forecast horizon (months)
 # --- Evaluation Settings ---
 rolling_window = 12  # Rolling window length (months)
 LOOKBACK_WINDOW = 12  # Used in Block F (walkforward backtest)
-feature_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']  # Used in Block F
+feature_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
