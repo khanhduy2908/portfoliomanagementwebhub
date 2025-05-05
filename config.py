@@ -1,19 +1,18 @@
-
 # config.py - Centralized Configuration File for Portfolio Optimization System
 
 # --- Investment Parameters ---
 tickers = ["VNM", "FPT", "MWG", "VCB", "REE"]
 benchmark_symbol = "VNINDEX"
 start_date = "2020-01-01"
-end_date = None  # None sẽ tự động lấy ngày hiện tại trong pipeline
-rf_annual = 9  # Lãi suất phi rủi ro hàng năm (%)
-rf = rf_annual / 12 / 100  # Lãi suất phi rủi ro hàng tháng (%)
-total_capital = 750_000_000  # Tổng vốn đầu tư (VND)
-risk_aversion = 5  # Mức độ ngại rủi ro (A)
+end_date = None  # None will default to current date in app pipeline
+rf_annual = 9  # Annual risk-free rate (%)
+rf = rf_annual / 12 / 100  # Monthly risk-free rate
+total_capital = 750_000_000  # Total investment capital (VND)
+risk_aversion = 5  # Risk aversion coefficient (A)
 
 # --- Portfolio Constraints ---
-weight_bounds = (0, 0.4)  # Giới hạn tỷ trọng mỗi cổ phiếu
-max_assets = 5            # Số lượng tài sản tối đa trong danh mục
+weight_bounds = (0, 0.4)  # Weight limits per asset
+max_assets = 5            # Max number of assets per portfolio
 
 # --- Forecast Model Settings ---
 tabnet_params = {
@@ -26,7 +25,7 @@ tabnet_params = {
     "scheduler_params": {"mode": "min", "patience": 5, "min_lr": 1e-5},
     "verbose": 0
 }
-forecast_horizon = 1  # Số tháng dự báo
+forecast_horizon = 1  # Months to forecast
 
 # --- Evaluation Settings ---
-rolling_window = 12  # Số tháng cho phân tích rolling
+rolling_window = 12  # Rolling analysis window in months
