@@ -64,12 +64,7 @@ if run_analysis:
             )
 
             selected_tickers, selected_combinations, latest_data = block_b_factor.run(data_stocks, returns_benchmark)
-
-            # BLOCK C Integration with feedback
             cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
-            if not cov_matrix_dict:
-                raise RuntimeError("No valid covariance matrices were generated. Check data completeness or GARCH failures.")
-
             adj_returns_combinations, model_store, features_df = block_d_forecast.run(data_stocks, selected_tickers, selected_combinations)
             valid_combinations = block_e_feasibility.run(adj_returns_combinations, cov_matrix_dict)
             walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df)
