@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
-from utils import config
+import config
 from utils import block_a_data
 from utils import block_b_factor
 from utils import block_c_covariance
