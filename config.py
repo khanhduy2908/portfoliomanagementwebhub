@@ -27,3 +27,12 @@ forecast_horizon = 1  # Forecast horizon (months)
 feature_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
 rolling_window = 12  # Rolling window length (months)
 LOOKBACK_WINDOW = 12  # Used in Block F (walkforward backtest)
+
+# --- Optimization Parameters ---
+SEED = 42
+N_SIMULATIONS = 10000
+CVaR_ALPHA = 0.95
+LAMBDA_CVaR = 10
+BETA_L2 = 0.1
+CVaR_SOFT_LIMIT = 10  # %
+SOLVERS = ["ECOS", "SCS"]
