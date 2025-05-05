@@ -25,7 +25,6 @@ tabnet_params = {
     "scheduler_params": {"mode": "min", "patience": 5, "min_lr": 1e-5},
     "verbose": 0
 }
-forecast_horizon = 1  # Months to forecast
-
-# --- Evaluation Settings ---
-LOOKBACK_WINDOW = 12  # Rolling analysis window in months
+forecast_horizon = 1
+feature_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
+LOOKBACK_WINDOW = 12 
