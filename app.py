@@ -63,7 +63,7 @@ if run_analysis:
                 config.tickers, config.benchmark_symbol, config.start_date, config.end_date
             )
 
-            selected_tickers, selected_combinations, latest_data = block_b_factor.run(data_stocks, returns_benchmark)
+            selected_tickers, selected_combinations, latest_data, ranking_df = block_b_factor.run(data_stocks, returns_benchmark)
             cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
             adj_returns_combinations, model_store, features_df = block_d_forecast.run(data_stocks, selected_tickers, selected_combinations)
             valid_combinations = block_e_feasibility.run(adj_returns_combinations, cov_matrix_dict)
