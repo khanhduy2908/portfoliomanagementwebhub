@@ -1,17 +1,15 @@
 # utils/block_b_factor.py
 
-import numpy as np
 import pandas as pd
-import warnings
-import optuna
+import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
-import seaborn as sns
+import optuna
+import warnings
 import utils.config as config
 
-# --- STEP 1: Factor Construction ---
+# --- Tính các yếu tố cơ bản ---
 def compute_factors(data_stocks, returns_benchmark):
     factor_data = []
 
@@ -27,6 +25,7 @@ def compute_factors(data_stocks, returns_benchmark):
         df['Momentum'] = df['Close'].pct_change(periods=3) * 100
         df.dropna(inplace=True)
 
+        # Tính Beta
         merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
                           left_on='time', right_index=True, how='inner')
 
@@ -40,24 +39,13 @@ def compute_factors(data_stocks, returns_benchmark):
         beta = model.coef_[0]
         df = df[df['time'].isin(merged['time'])]
         df['Beta'] = beta
+
         factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
 
     return pd.concat(factor_data, ignore_index=True)
 
-# --- STEP 2: Run Block B ---
-def run(data_stocks, returns_benchmark):
-    ranking_df = compute_factors(data_stocks, returns_benchmark)
-    latest_month = ranking_df['time'].max()
-    latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
-
-    # --- STEP 3: Standardize ---
-    scaler = StandardScaler()
-    factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
-    scaled = scaler.fit_transform(latest_data[factor_cols])
-    scaled_df = pd.DataFrame(scaled, columns=[f + '_S' for f in factor_cols])
-    latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
-
-    # --- STEP 4: Optuna Optimization ---
+# --- Tối ưu trọng số qua Optuna ---
+def optimize_weights(latest_data):
     def objective(trial):
         weights = np.array([
             trial.suggest_float('w_return', 0, 1),
@@ -66,9 +54,11 @@ def run(data_stocks, returns_benchmark):
             trial.suggest_float('w_mom', 0, 1),
             trial.suggest_float('w_beta', 0, 1)
         ])
+
         if np.sum(weights) == 0:
             return -1e9
         weights /= np.sum(weights)
+
         score = (
             weights[0] * latest_data['Return_S'] +
             weights[2] * latest_data['Liquidity_S'] +
@@ -81,11 +71,29 @@ def run(data_stocks, returns_benchmark):
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=50)
+    return study.best_params
 
-    # --- STEP 5: Final Score & Rank ---
-    w_opt = study.best_params
+# --- Hàm chính ---
+def run(data_stocks, returns_benchmark):
+    ranking_df = compute_factors(data_stocks, returns_benchmark)
+
+    # Lấy tháng gần nhất
+    latest_month = ranking_df['time'].max()
+    latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
+
+    # Scale
+    factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
+    scaler = StandardScaler()
+    scaled_values = scaler.fit_transform(latest_data[factor_cols])
+    scaled_df = pd.DataFrame(scaled_values, columns=[f + '_S' for f in factor_cols])
+    latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
+
+    # Optuna
+    w_opt = optimize_weights(latest_data)
     w_arr = np.array(list(w_opt.values()))
     w_arr /= w_arr.sum()
+
+    # Tính điểm và xếp hạng
     latest_data['Score'] = (
         w_arr[0] * latest_data['Return_S'] +
         w_arr[2] * latest_data['Liquidity_S'] +
@@ -95,7 +103,23 @@ def run(data_stocks, returns_benchmark):
     )
     latest_data['Rank'] = latest_data['Score'].rank(ascending=False)
 
-    # --- STEP 6: Clustering ---
-    cluster_features = [f + '_S' for f in factor_cols]
+    # Phân cụm đa dạng hóa
+    features_for_cluster = [f + '_S' for f in factor_cols]
     kmeans = KMeans(n_clusters=3, n_init=10, random_state=42)
-    latest_data['Cluster'] = kmeans.fit_predict(latest_data[cluster_features])
+    latest_data['Cluster'] = kmeans.fit_predict(latest_data[features_for_cluster])
+
+    # Chọn top 5 cổ phiếu tốt nhất và đa dạng nhất
+    selected_df = (
+        latest_data.sort_values('Score', ascending=False)
+        .groupby('Cluster')
+        .head(2)
+        .sort_values('Rank')
+        .head(5)
+        .reset_index(drop=True)
+    )
+
+    selected_tickers = selected_df['Ticker'].tolist()
+    from itertools import combinations
+    selected_combinations = ['-'.join(c) for c in combinations(selected_tickers, 3)]
+
+    return selected_tickers, selected_combinations, latest_data, ranking_df
