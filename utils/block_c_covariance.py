@@ -1,5 +1,3 @@
-### BLOCK C: Covariance Estimation (GARCH + Ledoit-Wolf)
-```python
 import warnings
 import numpy as np
 import pandas as pd
@@ -48,18 +46,18 @@ def compute_shrunk_cov_matrix(tickers_subset, returns_df, weight_garch=0.6):
 
     return pd.DataFrame(cov_combined, index=tickers_subset, columns=tickers_subset)
 
-# --- Batch Estimation ---
-cov_matrix_dict = {}
-print("🔁 Calculating Shrunk Covariance Matrices...")
+def run(selected_combinations, returns_pivot_stocks):
+    cov_matrix_dict = {}
+    print("Calculating Shrunk Covariance Matrices...")
 
-for combo in tqdm(selected_combinations, desc="Portfolio Combinations"):
-    tickers_subset = combo.split('-')
-    try:
-        cov_matrix = compute_shrunk_cov_matrix(tickers_subset, returns_pivot_stocks)
-        cov_matrix_dict[combo] = cov_matrix
-    except Exception as e:
-        warnings.warn(f"[ERROR] {combo}: {e}")
-        continue
+    for combo in tqdm(selected_combinations, desc="Portfolio Combinations"):
+        tickers_subset = combo.split('-')
+        try:
+            cov_matrix = compute_shrunk_cov_matrix(tickers_subset, returns_pivot_stocks)
+            cov_matrix_dict[combo] = cov_matrix
+        except Exception as e:
+            warnings.warn(f"[ERROR] {combo}: {e}")
+            continue
 
-print(f"✅ Done. Total valid portfolios: {len(cov_matrix_dict)}")
-```
+    print(f"Done. Total valid portfolios: {len(cov_matrix_dict)}")
+    return cov_matrix_dict
