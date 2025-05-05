@@ -24,6 +24,6 @@ tabnet_params = {
 }
 forecast_horizon = 1  # Forecast horizon (months)
 
-# --- Evaluation Settings ---
+feature_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
 rolling_window = 12  # Rolling window length (months)
 LOOKBACK_WINDOW = 12  # Used in Block F (walkforward backtest)
