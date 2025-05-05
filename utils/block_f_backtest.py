@@ -1,6 +1,3 @@
-### BLOCK F: Walkforward Backtesting using TabNet (Professional Implementation)
-
-```python
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -8,106 +5,110 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from pytorch_tabnet.tab_model import TabNetRegressor
 import joblib
 from collections import defaultdict
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# --- Configuration ---
-min_samples = 100
-n_splits = 5
-lookback = 12
+# --- Main Function ---
+def run(valid_combinations, features_df, feature_cols=None):
+    min_samples = 100
+    n_splits = 5
+    lookback = 12
 
-walkforward_results = []
-eval_logs = []
-error_by_stock = defaultdict(list)
+    if feature_cols is None:
+        feature_cols = [col for col in features_df.columns if col not in ['Ticker', 'time', 'Return_Close']]
 
-for combo in valid_combinations:
-    subset = combo.split('-')
-    df_combo = features_df[features_df['Ticker'].isin(subset)].copy()
+    eval_logs = []
+    error_by_stock = defaultdict(list)
+    walkforward_results = []
 
-    X_all, y_all, meta = [], [], []
-    for ticker in subset:
-        df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
-        for i in range(lookback, len(df_ticker)):
-            window = df_ticker[feature_cols].iloc[i - lookback:i].values.flatten()
-            target = df_ticker['Return_Close'].iloc[i]
-            ts = df_ticker['time'].iloc[i]
-            X_all.append(window)
-            y_all.append(target)
-            meta.append({'time': ts, 'ticker': ticker})
+    for combo in valid_combinations:
+        subset = combo.split('-')
+        df_combo = features_df[features_df['Ticker'].isin(subset)].copy()
 
-    X_all = np.array(X_all)
-    y_all = np.array(y_all)
-    meta_df = pd.DataFrame(meta)
+        X_all, y_all, meta = [], [], []
+        for ticker in subset:
+            df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
+            for i in range(lookback, len(df_ticker)):
+                window = df_ticker[feature_cols].iloc[i - lookback:i].values.flatten()
+                target = df_ticker['Return_Close'].iloc[i]
+                ts = df_ticker['time'].iloc[i]
+                X_all.append(window)
+                y_all.append(target)
+                meta.append({'time': ts, 'ticker': ticker})
 
-    if len(X_all) < min_samples:
-        print(f"{combo}: Not enough samples ({len(X_all)}). Skipping.")
-        continue
+        X_all = np.array(X_all)
+        y_all = np.array(y_all)
+        meta_df = pd.DataFrame(meta)
 
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X_all)
-
-    split_size = int(len(X_scaled) / (n_splits + 1))
-    maes, r2s, accs, dir_accs = [], [], [], []
-    preds_all, y_all_vals, tickers_all = [], [], []
-
-    for i in range(n_splits):
-        train_end = (i + 1) * split_size
-        test_end = train_end + split_size
-
-        X_train = X_scaled[:train_end]
-        y_train = y_all[:train_end].reshape(-1, 1)
-        X_test = X_scaled[train_end:test_end]
-        y_test = y_all[train_end:test_end].reshape(-1, 1)
-        test_meta = meta_df.iloc[train_end:test_end]
-
-        if len(X_test) == 0:
+        if len(X_all) < min_samples:
+            print(f"{combo}: Not enough samples ({len(X_all)}). Skipping.")
             continue
 
-        model = TabNetRegressor(seed=42)
-        model.fit(
-            X_train=X_train, y_train=y_train,
-            eval_set=[(X_test, y_test)],
-            eval_metric=['mae'],
-            max_epochs=100, patience=10,
-            batch_size=256, virtual_batch_size=128
-        )
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X_all)
 
-        preds = model.predict(X_test).squeeze()
-        y_true = y_test.squeeze()
+        split_size = int(len(X_scaled) / (n_splits + 1))
+        maes, r2s, accs, dir_accs = [], [], [], []
+        preds_all, y_all_vals, tickers_all = [], [], []
 
-        # Metrics
-        mae = mean_absolute_error(y_true, preds)
-        r2 = r2_score(y_true, preds)
-        acc = (np.sign(y_true) == np.sign(preds)).mean()
-        dir_acc = ((preds * y_true) > 0).mean()
+        for i in range(n_splits):
+            train_end = (i + 1) * split_size
+            test_end = train_end + split_size
 
-        maes.append(mae)
-        r2s.append(r2)
-        accs.append(acc)
-        dir_accs.append(dir_acc)
+            X_train = X_scaled[:train_end]
+            y_train = y_all[:train_end].reshape(-1, 1)
+            X_test = X_scaled[train_end:test_end]
+            y_test = y_all[train_end:test_end].reshape(-1, 1)
+            test_meta = meta_df.iloc[train_end:test_end]
 
-        preds_all.extend(preds)
-        y_all_vals.extend(y_true)
-        tickers_all.extend(test_meta['ticker'].values)
+            if len(X_test) == 0:
+                continue
 
-        joblib.dump(model, f"model_{combo}_fold{i}.pkl")
+            model = TabNetRegressor(seed=42)
+            model.fit(
+                X_train=X_train, y_train=y_train,
+                eval_set=[(X_test, y_test)],
+                eval_metric=['mae'],
+                max_epochs=100, patience=10,
+                batch_size=256, virtual_batch_size=128
+            )
 
-    walkforward_results.append({
-        'Portfolio': combo,
-        'MAE': np.mean(maes),
-        'R2': np.mean(r2s),
-        'Accuracy': np.mean(accs),
-        'Directional Accuracy': np.mean(dir_accs)
-    })
+            preds = model.predict(X_test).squeeze()
+            y_true = y_test.squeeze()
 
-    error_df = pd.DataFrame({
-        'Ticker': tickers_all,
-        'True': y_all_vals,
-        'Pred': preds_all
-    })
-    error_df['Error'] = np.abs(error_df['True'] - error_df['Pred'])
-    stock_error = error_df.groupby('Ticker')['Error'].mean().sort_values(ascending=False)
-    error_by_stock[combo] = stock_error
+            mae = mean_absolute_error(y_true, preds)
+            r2 = r2_score(y_true, preds)
+            acc = (np.sign(y_true) == np.sign(preds)).mean()
+            dir_acc = ((preds * y_true) > 0).mean()
 
-# --- Summary ---
-walkforward_df = pd.DataFrame(walkforward_results).sort_values('MAE')
-print("\nWalkforward Evaluation Summary:")
-print(walkforward_df.round(4))
+            maes.append(mae)
+            r2s.append(r2)
+            accs.append(acc)
+            dir_accs.append(dir_acc)
+
+            preds_all.extend(preds)
+            y_all_vals.extend(y_true)
+            tickers_all.extend(test_meta['ticker'].values)
+
+            joblib.dump(model, f"model_{combo}_fold{i}.pkl")
+
+        walkforward_results.append({
+            'Portfolio': combo,
+            'MAE': np.mean(maes),
+            'R2': np.mean(r2s),
+            'Accuracy': np.mean(accs),
+            'Directional Accuracy': np.mean(dir_accs)
+        })
+
+        error_df = pd.DataFrame({
+            'Ticker': tickers_all,
+            'True': y_all_vals,
+            'Pred': preds_all
+        })
+        error_df['Error'] = np.abs(error_df['True'] - error_df['Pred'])
+        stock_error = error_df.groupby('Ticker')['Error'].mean().sort_values(ascending=False)
+        error_by_stock[combo] = stock_error
+
+    walkforward_df = pd.DataFrame(walkforward_results).sort_values('MAE')
+
+    return walkforward_df, error_by_stock
