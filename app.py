@@ -67,7 +67,7 @@ if run_analysis:
             cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
             adj_returns_combinations, model_store, features_df = block_d_forecast.run(data_stocks, selected_tickers, selected_combinations)
             valid_combinations = block_e_feasibility.run(adj_returns_combinations, cov_matrix_dict)
-            walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df)
+            walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df, factor_cols)
             hrp_cvar_results = block_g_optimization.run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark)
 
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio = block_h_complete_portfolio.run(
