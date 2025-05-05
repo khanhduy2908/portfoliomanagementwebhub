@@ -1,72 +1,97 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import matplotlib.cm as cm
-from matplotlib.colors import Normalize
+# utils/block_e2_visualization.py
+
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import streamlit as st
+from matplotlib.colors import Normalize
 
+def run(data_stocks, data_benchmark, benchmark_symbol,
+        weights, tickers_portfolio,
+        start_date, end_date, rf):
 
-def plot_e1_asset_performance_and_risk_bubble(returns_df, tickers, rf_monthly, start_date, end_date):
-    df = returns_df[tickers].copy()
-    df = df.loc[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))]
+    st.markdown("### 📊 Portfolio vs Benchmark Visualization")
 
-    if df.empty:
-        raise ValueError("❌ Không có dữ liệu sau khi lọc thời gian.")
+    # --- STEP 1: Chuẩn bị dữ liệu giá ---
+    df_price = data_stocks[data_stocks['Ticker'].isin(tickers_portfolio)].copy()
+    df_benchmark = data_benchmark[data_benchmark['Ticker'] == benchmark_symbol].copy()
 
-    daily_returns = df / 100
-    cum_returns = (1 + daily_returns).cumprod()
+    df_price['time'] = pd.to_datetime(df_price['time'], errors='coerce')
+    df_benchmark['time'] = pd.to_datetime(df_benchmark['time'], errors='coerce')
 
-    annualized_returns = daily_returns.mean() * 12
-    annualized_volatility = daily_returns.std() * np.sqrt(12)
-    sharpe_ratios = (annualized_returns - rf_monthly) / annualized_volatility
+    df_prices = df_price.pivot(index='time', columns='Ticker', values='Close').sort_index()
+    df_benchmark = df_benchmark.pivot(index='time', columns='Ticker', values='Close').sort_index()
+    df_benchmark = df_benchmark[[benchmark_symbol]]
 
-    fig, ax = plt.subplots(1, 2, figsize=(16, 6), facecolor='white')
+    common_dates = df_prices.index.intersection(df_benchmark.index)
+    if common_dates.empty:
+        st.warning("⚠️ Không có ngày giao dịch chung giữa danh mục và benchmark.")
+        return
 
-    for ticker in tickers:
-        ax[0].plot(cum_returns.index, cum_returns[ticker], label=ticker, linewidth=2)
-    ax[0].set_title("Historical Cumulative Performance", fontsize=13)
-    ax[0].set_xlabel("Time")
-    ax[0].set_ylabel("Cumulative Return")
-    ax[0].legend()
-    ax[0].grid(False)
+    df_prices = df_prices.loc[common_dates]
+    df_benchmark = df_benchmark.loc[common_dates]
 
-    colors = cm.coolwarm((sharpe_ratios - sharpe_ratios.min()) / (sharpe_ratios.max() - sharpe_ratios.min()))
-    norm = Normalize(vmin=sharpe_ratios.min(), vmax=sharpe_ratios.max())
-    cmap = cm.coolwarm
+    # --- STEP 2: Tính toán lợi suất và tích lũy ---
+    portfolio_returns = df_prices.pct_change().dropna() @ weights
+    benchmark_returns = df_benchmark[benchmark_symbol].pct_change().dropna()
 
-    for i, ticker in enumerate(tickers):
-        color_val = colors[i]
-        color_rgb = cmap(norm(sharpe_ratios[ticker]))
-        luminance = 0.299 * color_rgb[0] + 0.587 * color_rgb[1] + 0.114 * color_rgb[2]
-        text_color = 'black' if luminance > 0.6 else 'white'
+    cum_portfolio = (1 + portfolio_returns).cumprod()
+    cum_benchmark = (1 + benchmark_returns).cumprod()
 
-        ax[1].scatter(
-            annualized_volatility[ticker] * 100,
-            annualized_returns[ticker] * 100,
-            s=1500,
-            c=[color_val],
-            edgecolors='black',
-            linewidths=1.5,
-            alpha=0.95,
-            zorder=3
-        )
-        ax[1].annotate(
-            ticker,
-            (annualized_volatility[ticker] * 100, annualized_returns[ticker] * 100),
-            color=text_color,
-            weight='bold',
+    # --- STEP 3: Risk & Return ---
+    mean_p, mean_b = portfolio_returns.mean() * 12, benchmark_returns.mean() * 12
+    vol_p, vol_b = portfolio_returns.std() * np.sqrt(12), benchmark_returns.std() * np.sqrt(12)
+    sharpe_p = (mean_p - rf * 12) / vol_p if vol_p > 0 else np.nan
+    sharpe_b = (mean_b - rf * 12) / vol_b if vol_b > 0 else np.nan
+
+    # --- STEP 4: Vẽ biểu đồ hiệu suất tích lũy ---
+    fig1, ax1 = plt.subplots(figsize=(12, 6))
+    ax1.plot(cum_portfolio.index, cum_portfolio * 100, label='Portfolio', color='dodgerblue', linewidth=2)
+    ax1.plot(cum_benchmark.index, cum_benchmark * 100, label=benchmark_symbol, color='crimson', linewidth=2)
+    ax1.set_title("Cumulative Return Comparison", fontsize=14)
+    ax1.set_ylabel("Cumulative Return (%)")
+    ax1.set_xlabel("Time")
+    ax1.legend()
+    ax1.grid(False)
+    st.pyplot(fig1)
+
+    # --- STEP 5: Biểu đồ Risk-Return Bubble ---
+    fig2, ax2 = plt.subplots(figsize=(10, 6))
+    labels = ['Portfolio', benchmark_symbol]
+    vols = [vol_p, vol_b]
+    rets = [mean_p, mean_b]
+    sharpes = [sharpe_p, sharpe_b]
+
+    norm = Normalize(vmin=min(sharpes), vmax=max(sharpes))
+    colors = cm.coolwarm(norm(sharpes))
+
+    for i in range(2):
+        x = vols[i] * 100
+        y = rets[i] * 100
+        color = colors[i]
+        ax2.scatter(x, y, s=1500, c=[color], edgecolors='black', label=labels[i])
+
+        # Hiển thị tên + Sharpe ratio ngay trên bubble
+        ax2.annotate(
+            f"{labels[i]}\nSharpe: {sharpes[i]:.2f}",
+            (x, y),
+            textcoords="offset points",
+            xytext=(0, 10),
             ha='center',
-            va='center',
             fontsize=10,
-            zorder=4
+            color='black',
+            weight='bold'
         )
 
-    ax[1].set_title("Risk vs Return (Annualized)", fontsize=13)
-    ax[1].set_xlabel("Volatility (%)")
-    ax[1].set_ylabel("Return (%)")
-    ax[1].grid(False)
+    ax2.set_title("Risk vs Return (Annualized)", fontsize=14)
+    ax2.set_xlabel("Volatility (%)")
+    ax2.set_ylabel("Return (%)")
+    ax2.grid(False)
 
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm = plt.cm.ScalarMappable(cmap='coolwarm', norm=norm)
     sm.set_array([])
-    cbar = plt.colorbar(sm, ax=ax[1])
+    cbar = plt.colorbar(sm, ax=ax2)
     cbar.set_label('Sharpe Ratio')
-    plt.show()
+
+    st.pyplot(fig2)
