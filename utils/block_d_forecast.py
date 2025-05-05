@@ -14,7 +14,7 @@ from pytorch_tabnet.tab_model import TabNetRegressor
 from pytorch_tabnet.callbacks import EarlyStopping
 import torch
 import warnings
-import utils.config as config
+import config
 
 warnings.filterwarnings("ignore")
 
