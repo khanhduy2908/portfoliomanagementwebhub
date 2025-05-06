@@ -7,31 +7,28 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         alpha_cvar=0.95, lambda_cvar=10, beta_l2=0.05, n_simulations=30000,
         y_min=0.6, y_max=0.9):
 
-    if not hrp_cvar_results:
-        raise ValueError("No valid HRP-CVaR results from Block G.")
+    # --- Defensive check for result availability ---
+    if not hrp_cvar_results or not isinstance(hrp_cvar_results, dict):
+        raise ValueError("Block G did not return any valid portfolio dictionary.")
 
-    # --- Select best portfolio ---
-    best_key = max(hrp_cvar_results, key=lambda k: hrp_cvar_results[k]['Sharpe Ratio'] if not np.isnan(hrp_cvar_results[k]['Sharpe Ratio']) else -np.inf)
-    best_portfolio = hrp_cvar_results[best_key]
+    hrp_portfolio_list = list(hrp_cvar_results.values())
+    hrp_portfolio_list = [p for p in hrp_portfolio_list if 'Sharpe Ratio' in p and not np.isnan(p['Sharpe Ratio'])]
+
+    if not hrp_portfolio_list:
+        raise ValueError("All portfolios have invalid or missing Sharpe Ratio.")
+
+    # --- Select best portfolio by Sharpe Ratio ---
+    best_portfolio = max(hrp_portfolio_list, key=lambda p: p['Sharpe Ratio'])
+    portfolio_name = best_portfolio['Portfolio']
     tickers = list(best_portfolio['Weights'].keys())
     weights_hrp = np.array(list(best_portfolio['Weights'].values()))
-    portfolio_name = best_key
 
-    try:
-        mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
-        cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
-    except Exception as e:
-        st.warning(f"⚠️ Fallback to HRP weights due to missing mu or cov: {e}")
-        mu = np.full(len(tickers), 0.01)  # assume small positive return
-        cov = np.identity(len(tickers)) * 0.02
+    mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
+    cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
 
     # --- Simulate returns ---
     np.random.seed(42)
-    try:
-        simulated_returns = np.random.multivariate_normal(mean=mu, cov=cov, size=n_simulations)
-    except Exception as e:
-        st.warning(f"⚠️ Failed to simulate returns, fallback to normal: {e}")
-        simulated_returns = np.random.normal(loc=mu.mean(), scale=np.sqrt(np.diag(cov).mean()), size=(n_simulations, len(tickers)))
+    simulated_returns = np.random.multivariate_normal(mean=mu, cov=cov, size=n_simulations)
 
     # --- CVaR Optimization ---
     w = cp.Variable(len(tickers))
@@ -52,22 +49,19 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
     ]
 
     problem = cp.Problem(objective, constraints)
-    try:
-        problem.solve(solver='SCS', max_iters=10000)
-        if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
-            raise ValueError("CVaR optimization failed.")
-        w_opt = w.value
-    except Exception as e:
-        st.warning(f"⚠️ CVaR optimization failed. Fallback to HRP weights: {e}")
-        w_opt = weights_hrp
+    problem.solve(solver='SCS')
 
-    # --- Result calculation ---
+    if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
+        raise ValueError("Complete portfolio optimization failed.")
+
+    # --- Results ---
+    w_opt = w.value
     mu_p = float(mu @ w_opt)
     sigma_p = np.sqrt(w_opt.T @ cov @ w_opt)
     losses = -simulated_returns @ w_opt
-    cvar_p = float(np.percentile(losses, 100 * alpha_cvar))  # simple proxy
+    cvar_p = float(VaR.value + np.mean(np.maximum(losses - VaR.value, 0)) / (1 - alpha_cvar))
 
-    y_opt = (mu_p - rf) / (A * sigma_p**2) if sigma_p > 0 else 0
+    y_opt = (mu_p - rf) / (A * sigma_p**2)
     y_capped = max(y_min, min(y_opt, y_max))
 
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
@@ -78,7 +72,7 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
     capital_rf = total_capital - capital_risky
     capital_alloc = {tickers[i]: capital_risky * w_opt[i] for i in range(len(tickers))}
 
-    # --- Output ---
+    # --- Return structured output ---
     portfolio_info = {
         "portfolio_name": portfolio_name,
         "mu_p": mu_p,
@@ -95,7 +89,6 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         "capital_alloc": capital_alloc
     }
 
-    # --- Streamlit Display ---
     st.subheader("Optimal Complete Portfolio Summary")
     st.markdown(f"**Selected Portfolio**: `{portfolio_name}`")
     st.markdown(f"- Risk Aversion (A): `{A}`")
