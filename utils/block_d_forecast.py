@@ -1,5 +1,3 @@
-# utils/block_d_forecast.py
-
 import os
 import pandas as pd
 import numpy as np
@@ -9,19 +7,17 @@ import hashlib
 import lightgbm as lgb
 import xgboost as xgb
 from sklearn.linear_model import RidgeCV
-from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 from pytorch_tabnet.tab_model import TabNetRegressor
 from pytorch_tabnet.callbacks import EarlyStopping
 import torch
+import config
 
 warnings.filterwarnings("ignore")
 
 lookback = 12
 min_samples = 100
-adj_returns_combinations = {}
-model_store = {}
 feature_cols = ['Return_Close', 'Return_Volume', 'Spread_HL', 'Volatility_Close', 'Ticker_Encoded']
 
 def engineer_features(df, ticker_id):
@@ -95,6 +91,8 @@ def train_stacked_model(X, y, n_folds=5):
     return base_models, meta_model
 
 def run(data_stocks, selected_tickers, selected_combinations):
+    adj_returns_combinations = {}
+    model_store = {}
     features_all = []
     valid_tickers = []
 
@@ -103,7 +101,7 @@ def run(data_stocks, selected_tickers, selected_combinations):
         df_feat = engineer_features(df, ticker_id=i)
 
         if df_feat.empty or df_feat.shape[0] < lookback + 5:
-            warnings.warn(f"⚠️ {ticker}: không đủ dữ liệu.")
+            warnings.warn(f"⚠️ {ticker}: not enough data.")
             continue
 
         df_feat['Ticker'] = ticker
@@ -111,10 +109,12 @@ def run(data_stocks, selected_tickers, selected_combinations):
         valid_tickers.append(ticker)
 
     if not features_all:
-        raise ValueError("❌ Không có cổ phiếu nào đủ dữ liệu để dự báo.")
+        raise ValueError("❌ No stock has sufficient data for forecasting.")
 
     features_df = pd.concat(features_all, ignore_index=True)
     os.makedirs("saved_models", exist_ok=True)
+
+    forecast_valid_combos = []
 
     for combo in selected_combinations:
         subset = tuple(combo)
@@ -129,33 +129,36 @@ def run(data_stocks, selected_tickers, selected_combinations):
             model_data = joblib.load(model_path)
             adj_returns_combinations[subset] = model_data['adj_return']
             model_store[subset] = model_data['model_store']
+            forecast_valid_combos.append(subset)
             continue
 
         df_combo = features_df[features_df['Ticker'].isin(subset)].copy()
         X_raw, y = construct_dataset(df_combo, subset)
 
         if len(X_raw) < min_samples:
-            warnings.warn(f"⚠️ Bỏ qua {subset}: không đủ mẫu huấn luyện.")
+            warnings.warn(f"⚠️ Skipped {subset}: insufficient samples.")
             continue
 
         scaler = StandardScaler()
         X = scaler.fit_transform(X_raw)
-
         base_models, meta_model = train_stacked_model(X, y)
-
-        pred_lgb = base_models[-1][0].predict(X)
-        pred_xgb = base_models[-1][1].predict(X)
-        pred_tab = base_models[-1][2].predict(X).squeeze() if base_models[-1][2] else np.zeros_like(pred_lgb)
-
-        X_stack = np.column_stack([pred_lgb, pred_xgb, pred_tab])
-        final_pred = meta_model.predict(X_stack)
 
         adj_return_dict = {}
         for t in subset:
-            idx = features_df[(features_df['Ticker'] == t)].index
-            if len(idx) == 0:
+            df_last = features_df[features_df['Ticker'] == t].sort_values('time').iloc[-lookback:]
+            if df_last.shape[0] < lookback:
                 continue
-            adj_return_dict[t] = final_pred[idx[-1]]
+            X_last = []
+            for lag in reversed(range(lookback)):
+                for col in feature_cols:
+                    X_last.append(df_last[col].iloc[lag])
+            X_last = scaler.transform([X_last])
+            pred_lgb = base_models[-1][0].predict(X_last)
+            pred_xgb = base_models[-1][1].predict(X_last)
+            pred_tab = base_models[-1][2].predict(X_last).squeeze() if base_models[-1][2] else 0
+            X_stack = np.column_stack([pred_lgb, pred_xgb, [pred_tab]])
+            final = meta_model.predict(X_stack)[0]
+            adj_return_dict[t] = final
 
         model_store_obj = {
             'scaler': scaler,
@@ -166,10 +169,15 @@ def run(data_stocks, selected_tickers, selected_combinations):
 
         adj_returns_combinations[subset] = adj_return_dict
         model_store[subset] = model_store_obj
+        forecast_valid_combos.append(subset)
 
         joblib.dump({
             'adj_return': adj_return_dict,
             'model_store': model_store_obj
         }, model_path)
 
+    if not adj_returns_combinations:
+        raise ValueError("❌ No valid combination has forecast results.")
+
+    config.forecast_valid_combos = forecast_valid_combos
     return adj_returns_combinations, model_store, features_df
