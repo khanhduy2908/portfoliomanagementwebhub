@@ -66,32 +66,32 @@ if run_analysis:
             data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
                 config.tickers, config.benchmark_symbol, config.start_date, config.end_date
             )
-            st.success("✅ Block A – Data loaded and monthly returns calculated.")
+            st.success("Block A – Data loaded and monthly returns calculated.")
 
             selected_tickers, selected_combinations, latest_data, ranking_df = block_b_factor.run(data_stocks, returns_benchmark)
-            st.success("✅ Block B – Stock ranking using factor analysis completed.")
+            st.success("Block B – Stock ranking using factor analysis completed.")
 
             cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
-            st.success("✅ Block C – Covariance matrix estimation completed.")
+            st.success("Block C – Covariance matrix estimation completed.")
 
             adj_returns_combinations, model_store, features_df = block_d_forecast.run(data_stocks, selected_tickers, selected_combinations)
-            st.success("✅ Block D – Return forecasting with ML ensemble completed.")
+            st.success("Block D – Return forecasting with ML ensemble completed.")
 
             valid_combinations = block_e_feasibility.run(adj_returns_combinations, cov_matrix_dict)
-            st.success("✅ Block E – Feasible portfolio combinations selected.")
+            st.success("Block E – Feasible portfolio combinations selected.")
 
             factor_cols = ['Return_Close', 'Return_Volume', 'Spread_HL', 'Volatility_Close', 'Ticker_Encoded']
             walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df, factor_cols)
-            st.success("✅ Block F – Forecast model backtesting completed.")
+            st.success("Block F – Forecast model backtesting completed.")
 
             hrp_cvar_results = block_g_optimization.run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark)
-            st.success("✅ Block G – HRP + CVaR portfolio optimization completed.")
+            st.success("Block G – HRP + CVaR portfolio optimization completed.")
 
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio = block_h_complete_portfolio.run(
                 hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
                 config.rf, config.A, config.total_capital
             )
-            st.success("✅ Block H – Complete portfolio construction finished.")
+            st.success("Block H – Complete portfolio construction finished.")
 
             block_i_performance_analysis.run(
                 best_portfolio, returns_pivot_stocks, returns_benchmark,
@@ -99,7 +99,7 @@ if run_analysis:
                 data_stocks, data_benchmark, config.benchmark_symbol,
                 weights, tickers_portfolio, config.start_date, config.end_date
             )
-            st.success("✅ Block I – Portfolio performance evaluation done.")
+            st.success("Block I – Portfolio performance evaluation done.")
 
             block_e1_visualization.run(
                 returns_pivot_stocks, tickers_portfolio, config.rf,
@@ -110,14 +110,14 @@ if run_analysis:
                 weights, tickers_portfolio,
                 config.start_date, config.end_date, config.rf
             )
-            st.success("✅ Block I1 & I2 – Performance and benchmark visualizations generated.")
+            st.success("Block I1 & I2 – Performance and benchmark visualizations generated.")
 
             block_j_stress_testing.run(
                 best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
             )
-            st.success("✅ Block J – Multi-layer portfolio stress testing completed.")
+            st.success("Block J – Multi-layer portfolio stress testing completed.")
 
-            st.success("🎯 Portfolio optimization pipeline completed successfully.")
+            st.success("Portfolio optimization pipeline completed successfully.")
 
         except Exception as e:
-            st.error(f"❌ Pipeline execution failed: {str(e)}")
+            st.error(f"Pipeline execution failed: {str(e)}")
