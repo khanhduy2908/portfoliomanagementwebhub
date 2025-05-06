@@ -1,11 +1,10 @@
-# utils/block_j_stress_testing.py
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import t
 from datetime import datetime
+import streamlit as st
 
 def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     confidence_level = 0.95
@@ -19,7 +18,6 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     tickers = list(best_portfolio['Weights'].keys())
     beta_dict = latest_data.set_index('Ticker')['Beta'].to_dict()
 
-    # Auto-calculate monthly returns if not already available
     df_price = data_stocks[data_stocks['Ticker'].isin(tickers)].copy()
     df_price['time'] = pd.to_datetime(df_price['time'])
     df_pivot = df_price.pivot(index='time', columns='Ticker', values='Close').sort_index()
@@ -28,7 +26,7 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     mu_vec = np.array([monthly_returns[t].mean() for t in tickers])
     cov_matrix = monthly_returns[tickers].cov().values
 
-    # === F.1 Scenario Generator ===
+    # === F.1 Auto Scenario Stress ===
     def generate_auto_shocks(tickers, beta_dict, base_rate_shock, inflation_shock):
         shock_dict = {
             "Interest Rate Shock": {},
@@ -58,7 +56,7 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     stress_replay = np.array([beta_dict.get(t, 1.0) * historical_shock for t in tickers])
     portfolio_drop_hist = np.dot(weights, stress_replay)
 
-    # === F.3 Monte Carlo Stress ===
+    # === F.3 Monte Carlo Simulation ===
     sim_stress = np.random.multivariate_normal(mu_vec, cov_matrix, size=n_simulations)
     sim_stress += t.rvs(t_dist_df, size=(n_simulations, len(tickers))) * 0.02
     returns_sim = sim_stress @ weights
@@ -74,39 +72,40 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
         sensitivity_results.append({'Ticker': t, 'Portfolio Impact (%)': impact * 100})
 
     # === F.5 Visualization ===
-    plt.figure(figsize=(10, 5))
+    st.subheader("F.1 – Stress Scenario Impact")
     df_hypo = pd.DataFrame(hypo_results)
-    sns.barplot(data=df_hypo, x='Scenario', y='Portfolio Return (%)', palette='Reds', edgecolor='black')
-    plt.axhline(0, linestyle='--', color='black')
-    plt.title("Auto Stress Scenario Impact on Portfolio", fontsize=14)
-    plt.tight_layout()
-    plt.show()
+    fig1, ax1 = plt.subplots(figsize=(8, 4))
+    sns.barplot(data=df_hypo, x='Scenario', y='Portfolio Return (%)', palette='Reds', edgecolor='black', ax=ax1)
+    ax1.axhline(0, linestyle='--', color='black')
+    ax1.set_title("Stress Scenario Portfolio Impact")
+    st.pyplot(fig1)
 
-    plt.figure(figsize=(10, 5))
+    st.subheader("F.4 – Asset Sensitivity (20% Drop)")
     df_sens = pd.DataFrame(sensitivity_results)
-    sns.barplot(data=df_sens, x='Ticker', y='Portfolio Impact (%)', palette='Blues', edgecolor='black')
-    plt.axhline(0, linestyle='--', color='black')
-    plt.title("Sensitivity: 20% Drop per Asset", fontsize=14)
-    plt.tight_layout()
-    plt.show()
+    fig2, ax2 = plt.subplots(figsize=(8, 4))
+    sns.barplot(data=df_sens, x='Ticker', y='Portfolio Impact (%)', palette='Blues', edgecolor='black', ax=ax2)
+    ax2.axhline(0, linestyle='--', color='black')
+    ax2.set_title("Single-Asset Stress Test (20% Drop)")
+    st.pyplot(fig2)
 
-    plt.figure(figsize=(10, 5))
-    sns.histplot(returns_sim * 100, bins=50, kde=True, color='purple')
-    plt.axvline(-stress_var * 100, color='red', linestyle='--', label=f"VaR {int(confidence_level*100)}%: {-stress_var*100:.2f}%")
-    plt.axvline(-stress_cvar * 100, color='orange', linestyle='--', label=f"CVaR {int(confidence_level*100)}%: {-stress_cvar*100:.2f}%")
-    plt.title("Monte Carlo Stress Distribution", fontsize=14)
-    plt.xlabel("Portfolio Return (%)")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    st.subheader("F.3 – Monte Carlo Stress Distribution")
+    fig3, ax3 = plt.subplots(figsize=(8, 4))
+    sns.histplot(returns_sim * 100, bins=50, kde=True, color='purple', ax=ax3)
+    ax3.axvline(-stress_var * 100, color='red', linestyle='--', label=f"VaR {int(confidence_level*100)}%: {-stress_var*100:.2f}%")
+    ax3.axvline(-stress_cvar * 100, color='orange', linestyle='--', label=f"CVaR {int(confidence_level*100)}%: {-stress_cvar*100:.2f}%")
+    ax3.set_title("Monte Carlo Simulation – Portfolio Return Distribution")
+    ax3.set_xlabel("Portfolio Return (%)")
+    ax3.legend()
+    st.pyplot(fig3)
 
     # === F.6 Summary Table ===
     summary = pd.DataFrame({
-        'Type': ['Historical Shock', 'Monte Carlo VaR', 'Monte Carlo CVaR'],
+        'Type': ['Historical Shock', f'Monte Carlo VaR ({int(confidence_level*100)}%)', f'Monte Carlo CVaR ({int(confidence_level*100)}%)'],
         'Portfolio Drop (%)': [portfolio_drop_hist * 100, stress_var * 100, stress_cvar * 100],
-        'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M')
+        'Generated At': datetime.now().strftime('%Y-%m-%d %H:%M')
     })
 
-    print("\nSummary of Multi-Layer Stress Testing:")
-    print(summary.round(2))
+    st.subheader("F.6 – Stress Testing Summary")
+    st.dataframe(summary.round(2), use_container_width=True)
+
     return summary
