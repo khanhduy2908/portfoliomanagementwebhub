@@ -1,45 +1,37 @@
-# utils/block_i_performance_analysis.py
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 import streamlit as st
 
-plt.style.use('dark_background')
-
 def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         rf, A, total_capital,
         data_stocks, data_benchmark, benchmark_symbol,
         weights, tickers_portfolio, start_date, end_date):
 
-    # === 1. Re-align datetime index ===
+    # --- Re-align index ---
     returns_pivot_stocks.index = pd.to_datetime(returns_pivot_stocks.index)
     returns_benchmark.index = pd.to_datetime(returns_benchmark.index)
-
     date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
     common_index = date_range.intersection(returns_pivot_stocks.index)
 
     if common_index.empty:
         raise ValueError("❌ No return data available for the selected date range.")
 
-    returns_pivot_stocks = returns_pivot_stocks.loc[common_index].copy()
-    returns_benchmark = returns_benchmark.loc[common_index].copy()
+    returns_pivot_stocks = returns_pivot_stocks.loc[common_index]
+    returns_benchmark = returns_benchmark.loc[common_index]
 
-    # === 2. Compute Portfolio Returns ===
-    portfolio_returns_df = returns_pivot_stocks[tickers_portfolio].copy()
-    benchmark_returns_df = returns_benchmark.copy()
+    # --- Portfolio returns ---
+    portfolio_returns = returns_pivot_stocks[tickers_portfolio] @ weights
+    benchmark_returns = returns_benchmark['Benchmark_Return']
 
-    portfolio_returns = portfolio_returns_df @ weights
-    benchmark_returns = benchmark_returns_df['Benchmark_Return']
-
-    # === 3. Cumulative Returns ===
+    # --- Cumulative returns ---
     cumulative_returns = (1 + portfolio_returns / 100).cumprod()
     benchmark_cumulative = (1 + benchmark_returns / 100).cumprod()
     cumulative_returns /= cumulative_returns.iloc[0]
     benchmark_cumulative /= benchmark_cumulative.iloc[0]
 
-    # === 4. Metrics ===
+    # --- Performance metrics ---
     mean_return = portfolio_returns.mean()
     volatility = portfolio_returns.std()
     sharpe_ratio = (mean_return - rf * 100) / volatility if volatility > 0 else np.nan
@@ -52,26 +44,24 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     cagr = cumulative_returns.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
     calmar_ratio = cagr / abs(max_drawdown) if max_drawdown != 0 else np.nan
 
-    # === 5. Rolling Sharpe ===
+    # --- Rolling Sharpe Ratio ---
     rolling_sharpe = (portfolio_returns - rf * 100).rolling(12).mean() / portfolio_returns.rolling(12).std()
     rolling_sharpe = rolling_sharpe.dropna()
 
-    # === 6. Alpha/Beta ===
-    aligned_df = pd.concat([portfolio_returns, benchmark_returns], axis=1).dropna()
-    aligned_df.columns = ['Portfolio', 'Benchmark']
-    if len(aligned_df) >= 2:
-        X = aligned_df['Benchmark'].values.reshape(-1, 1)
-        y = aligned_df['Portfolio'].values
-        reg = LinearRegression().fit(X, y)
+    # --- Regression stats ---
+    aligned = pd.concat([portfolio_returns, benchmark_returns], axis=1).dropna()
+    aligned.columns = ['Portfolio', 'Benchmark']
+    if len(aligned) >= 2:
+        reg = LinearRegression().fit(aligned[['Benchmark']], aligned['Portfolio'])
         alpha = reg.intercept_
         beta = reg.coef_[0]
-        r_squared = reg.score(X, y)
-        tracking_error = np.std(aligned_df['Portfolio'] - aligned_df['Benchmark'])
-        info_ratio = (mean_return - benchmark_returns.mean()) / tracking_error if tracking_error != 0 else np.nan
+        r2 = reg.score(aligned[['Benchmark']], aligned['Portfolio'])
+        tracking_error = np.std(aligned['Portfolio'] - aligned['Benchmark'])
+        info_ratio = (mean_return - benchmark_returns.mean()) / tracking_error if tracking_error else np.nan
     else:
-        alpha = beta = r_squared = tracking_error = info_ratio = np.nan
+        alpha = beta = r2 = tracking_error = info_ratio = np.nan
 
-    # === 7. Summary Tables ===
+    # --- Summary tables ---
     benchmark_cagr = benchmark_cumulative.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
     summary_df = pd.DataFrame({
         'Metric': ['Mean Return (%)', 'Volatility (%)', 'Sharpe Ratio', 'Sortino Ratio',
@@ -91,40 +81,46 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
 
     regression_df = pd.DataFrame({
         'Metric': ['Alpha', 'Beta', 'R-squared', 'Tracking Error', 'Information Ratio'],
-        'Value': [alpha, beta, r_squared, tracking_error, info_ratio]
+        'Value': [alpha, beta, r2, tracking_error, info_ratio]
     })
 
-    # === 8. Visualizations ===
+    # --- Visualizations ---
     st.subheader("Cumulative Returns")
-    fig1, ax1 = plt.subplots(figsize=(10, 4))
+    fig1, ax1 = plt.subplots(figsize=(10, 4), facecolor='#1e1e1e')
     ax1.plot(cumulative_returns.index, cumulative_returns, label='Portfolio', color='cyan')
     ax1.plot(benchmark_cumulative.index, benchmark_cumulative, label='Benchmark', color='magenta')
-    ax1.set_title("Cumulative Returns (Normalized)")
-    ax1.set_xlabel("Date")
-    ax1.set_ylabel("Index Level")
-    ax1.legend()
+    ax1.set_title("Cumulative Returns (Normalized)", color='white')
+    ax1.set_xlabel("Date", color='white')
+    ax1.set_ylabel("Index Level", color='white')
+    ax1.tick_params(colors='white')
+    ax1.legend(facecolor='#1e1e1e', labelcolor='white')
     ax1.grid(True, alpha=0.3)
     st.pyplot(fig1)
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Drawdown")
-        fig2, ax2 = plt.subplots(figsize=(6, 3))
+        st.subheader("Drawdown (%)")
+        fig2, ax2 = plt.subplots(figsize=(6, 3), facecolor='#1e1e1e')
         ax2.fill_between(drawdown.index, drawdown * 100, color='red', alpha=0.4)
-        ax2.set_title("Drawdown (%)")
-        ax2.set_ylabel("Drawdown")
+        ax2.set_title("Portfolio Drawdown", color='white')
+        ax2.set_ylabel("Drawdown", color='white')
+        ax2.tick_params(colors='white')
         ax2.grid(True, alpha=0.3)
         st.pyplot(fig2)
 
     with col2:
         st.subheader("12-Month Rolling Sharpe Ratio")
-        fig3, ax3 = plt.subplots(figsize=(6, 3))
-        ax3.plot(rolling_sharpe.index, rolling_sharpe, color='orange')
-        ax3.axhline(0, linestyle='--', color='white', alpha=0.4)
-        ax3.set_title("Rolling Sharpe Ratio")
-        ax3.grid(True, alpha=0.3)
-        st.pyplot(fig3)
+        if not rolling_sharpe.empty:
+            fig3, ax3 = plt.subplots(figsize=(6, 3), facecolor='#1e1e1e')
+            ax3.plot(rolling_sharpe.index, rolling_sharpe, color='orange')
+            ax3.axhline(0, linestyle='--', color='white', alpha=0.4)
+            ax3.set_title("Rolling Sharpe Ratio", color='white')
+            ax3.tick_params(colors='white')
+            ax3.grid(True, alpha=0.3)
+            st.pyplot(fig3)
+        else:
+            st.warning("Not enough data for rolling Sharpe ratio.")
 
     st.subheader("Performance Summary")
     st.dataframe(summary_df.round(4), use_container_width=True)
