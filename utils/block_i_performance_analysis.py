@@ -1,3 +1,5 @@
+# utils/block_i_performance_analysis.py
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -12,13 +14,16 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         weights, tickers_portfolio, start_date, end_date):
 
     # === Reconstruct index based on start_date & end_date ===
-    date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
-    returns_pivot_stocks = returns_pivot_stocks.iloc[:len(date_range)].copy()
-    returns_benchmark = returns_benchmark.iloc[:len(date_range)].copy()
+    full_date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
+    num_rows = min(len(returns_pivot_stocks), len(full_date_range))
+    date_range = full_date_range[:num_rows]
+
+    returns_pivot_stocks = returns_pivot_stocks.iloc[:num_rows].copy()
+    returns_benchmark = returns_benchmark.iloc[:num_rows].copy()
     returns_pivot_stocks.index = date_range
     returns_benchmark.index = date_range
 
-    # Calculate portfolio & benchmark returns
+    # Calculate returns
     portfolio_returns_df = returns_pivot_stocks[tickers_portfolio].copy()
     benchmark_returns_df = returns_benchmark.copy()
 
