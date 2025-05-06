@@ -2,6 +2,7 @@
 
 import numpy as np
 import cvxpy as cp
+import pandas as pd
 import streamlit as st
 
 def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, total_capital,
