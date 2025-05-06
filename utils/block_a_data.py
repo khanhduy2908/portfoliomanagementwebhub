@@ -1,77 +1,43 @@
-# utils/block_a_data.py
-
-import warnings
 import pandas as pd
-from vnstock import Vnstock
-from itertools import combinations
-import streamlit as st
+import numpy as np
+from vnstock import stock_historical_data
 
 def run(tickers, benchmark_symbol, start_date, end_date):
-    def get_first_trading_day(df):
-        df = df.copy()
-        df.index = pd.to_datetime(df.index)
-        df = df.sort_index()
-        return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0])
-
-    def get_stock_data(ticker):
+    # --- Step 1: Download price data ---
+    data_all = []
+    for ticker in tickers + [benchmark_symbol]:
         try:
-            stock = Vnstock().stock(symbol=ticker, source='VCI')
-            df = stock.quote.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
-
-            if df.empty:
-                raise ValueError("Empty DataFrame")
-
-            required_cols = {'time', 'close', 'volume'}
-            if not required_cols.issubset(df.columns):
-                raise ValueError(f"Missing columns: {required_cols - set(df.columns)}")
-
-            df['time'] = pd.to_datetime(df['time'])
-            df.set_index('time', inplace=True)
-            df = df[['open', 'high', 'low', 'close', 'volume']]
-            df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-            return df
+            df = stock_historical_data(symbol=ticker, start_date=start_date.strftime('%Y-%m-%d'),
+                                       end_date=end_date.strftime('%Y-%m-%d'), resolution='1M', type='stock', source='VCI')
+            df['Ticker'] = ticker
+            data_all.append(df)
         except Exception as e:
-            st.warning(f"⚠️ {ticker}: failed to load - {e}")
-            return pd.DataFrame()
+            print(f"[ERROR] Failed to fetch data for {ticker}: {e}")
 
-    def load_all_monthly_data(tickers_list):
-        stock_data = []
-        failed_tickers = []
-        for ticker in tickers_list:
-            df = get_stock_data(ticker)
-            if df.empty:
-                failed_tickers.append(ticker)
-                continue
-            df_monthly = get_first_trading_day(df)
-            df_monthly['time'] = df_monthly.index
-            df_monthly['Ticker'] = ticker
-            stock_data.append(df_monthly.reset_index(drop=True))
-        if failed_tickers:
-            st.warning(f"Some tickers failed to load: {', '.join(failed_tickers)}")
-        return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
+    if not data_all:
+        raise ValueError("❌ No stock data fetched.")
 
-    data_stocks = load_all_monthly_data(tickers)
-    data_benchmark = load_all_monthly_data([benchmark_symbol])
+    df_all = pd.concat(data_all, ignore_index=True)
 
-    if data_stocks.empty or data_benchmark.empty:
-        raise ValueError("No valid stock or benchmark data is available.")
+    # --- Step 2: Clean and preprocess ---
+    df_all['time'] = pd.to_datetime(df_all['time'])  # ensure datetime format
+    df_all = df_all.sort_values(['Ticker', 'time'])
 
-    def compute_monthly_return(df):
-        df = df.sort_values(['Ticker', 'time'])
-        df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
-        return df.dropna(subset=['Return'])
+    data_stocks = df_all[df_all['Ticker'].isin(tickers)].copy()
+    data_benchmark = df_all[df_all['Ticker'] == benchmark_symbol].copy()
 
-    returns_stocks = compute_monthly_return(data_stocks)
-    returns_benchmark = compute_monthly_return(data_benchmark)
-    returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
+    # --- Step 3: Compute monthly returns ---
+    pivot_stocks = data_stocks.pivot(index='time', columns='Ticker', values='Close')
+    pivot_benchmark = data_benchmark.pivot(index='time', columns='Ticker', values='Close')
 
-    returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
-    returns_stocks = returns_stocks.sort_values('time')  # ensure time order
+    returns_pivot_stocks = pivot_stocks.pct_change().dropna() * 100
+    returns_benchmark = pivot_benchmark.pct_change().dropna() * 100
+    returns_benchmark.columns = ['Benchmark_Return']
 
-    returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
-    returns_benchmark.set_index('time', inplace=True)
+    # --- Step 4: Ensure DatetimeIndex ---
+    if isinstance(returns_pivot_stocks.index, pd.PeriodIndex):
+        returns_pivot_stocks.index = returns_pivot_stocks.index.to_timestamp()
+    if isinstance(returns_benchmark.index, pd.PeriodIndex):
+        returns_benchmark.index = returns_benchmark.index.to_timestamp()
 
-    portfolio_combinations = list(combinations(tickers, 3))
-    portfolio_labels = ['-'.join(p) for p in portfolio_combinations]
-
-    return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_labels
+    return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, list(returns_pivot_stocks.columns)
