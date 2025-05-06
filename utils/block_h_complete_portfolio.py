@@ -2,8 +2,9 @@
 
 import numpy as np
 import pandas as pd
+import warnings
+from scipy.optimize import minimize_scalar
 import config
-
 
 def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         rf, A, total_capital):
@@ -17,49 +18,46 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     tickers = list(best_portfolio['Weights'].keys())
     weights = np.array(list(best_portfolio['Weights'].values()))
 
-    portfolio_name = '-'.join(best_key) if isinstance(best_key, tuple) else str(best_key)
+    if isinstance(best_key, tuple):
+        portfolio_name = '-'.join(best_key)
+    else:
+        portfolio_name = str(best_key)
+
     mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
     cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
 
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = np.dot(weights, mu)
 
-    # --- Compute unconstrained y* ---
-    y_opt = (mu_p - rf) / (A * sigma_p ** 2) if sigma_p > 0 else 0
-
-    # --- Determine user risk profile and constraints ---
-    score = config.risk_score  # passed from sidebar slider (10–40)
+    # --- Set max risk-free allocation constraint based on user profile ---
+    score = config.risk_score_user if hasattr(config, 'risk_score_user') else 25
     if 10 <= score <= 17:
-        risk_profile = 'low'
+        max_rf_ratio = 0.85
     elif 18 <= score <= 27:
-        risk_profile = 'medium'
+        max_rf_ratio = 0.5
     elif 28 <= score <= 40:
-        risk_profile = 'high'
+        max_rf_ratio = 0.2
     else:
-        raise ValueError("Invalid risk score")
+        max_rf_ratio = 0.5  # default fallback
 
-    profile_constraints = {
-        'low':    {'y_min': 0.0, 'y_max': 0.4, 'min_rf_ratio': 0.6},
-        'medium': {'y_min': 0.3, 'y_max': 0.7, 'min_rf_ratio': 0.3},
-        'high':   {'y_min': 0.6, 'y_max': 1.0, 'min_rf_ratio': 0.0},
-    }
-    c = profile_constraints[risk_profile]
+    # --- Utility-Constrained Allocation Optimization ---
+    def utility_neg(y):
+        expected_rc = y * mu_p + (1 - y) * rf
+        sigma_c = y * sigma_p
+        utility = expected_rc - 0.5 * A * sigma_c**2
+        return -utility
 
-    # --- Clip y* based on constraints ---
-    y_capped = float(np.clip(y_opt, c['y_min'], c['y_max']))
-    capital_risky = y_capped * total_capital
-    capital_rf = total_capital - capital_risky
+    bounds = (0, 1 - max_rf_ratio)
+    opt_result = minimize_scalar(utility_neg, bounds=bounds, method='bounded')
 
-    # --- Enforce risk-free minimum constraint ---
-    rf_ratio = capital_rf / total_capital
-    if rf_ratio < c['min_rf_ratio']:
-        capital_rf = total_capital * c['min_rf_ratio']
-        capital_risky = total_capital - capital_rf
-        y_capped = capital_risky / total_capital
-
+    y_opt = opt_result.x
+    y_capped = np.clip(y_opt, config.y_min, config.y_max)
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c ** 2
+
+    capital_risky = y_capped * total_capital
+    capital_rf = total_capital - capital_risky
 
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
@@ -71,14 +69,11 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         'y_opt': y_opt,
         'y_capped': y_capped,
         'A': A,
-        'risk_score': score,
-        'risk_profile': risk_profile,
         'expected_rc': expected_rc,
         'sigma_c': sigma_c,
         'utility': utility,
         'capital_risky': capital_risky,
-        'capital_rf': capital_rf,
-        'total_capital': total_capital,
+        'capital_rf': capital_rf
     }
 
     return (best_portfolio, y_capped, capital_alloc,
