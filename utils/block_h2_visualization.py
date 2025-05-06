@@ -1,9 +1,10 @@
+# utils/block_h2_visualization.py
 
 import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
 
-def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt):
+def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers):
     st.markdown("### HRP vs Benchmark and Efficient Frontier with CAL")
 
     # --- HRP vs Benchmark (Bar Chart) ---
@@ -64,4 +65,8 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio, mu_p
     ax2.tick_params(axis='y', colors='white')
     ax2.legend(facecolor='black', labelcolor='white')
     ax2.grid(False)
+
+    st.markdown("#### Portfolio Tickers")
+    st.write(f"Selected tickers: {', '.join(tickers)}")
+
     st.pyplot(fig2)
