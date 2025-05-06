@@ -1,77 +1,55 @@
-# utils/block_a_data.py
+# utils/block_h_complete_portfolio.py
 
-import warnings
+import numpy as np
 import pandas as pd
-from vnstock import Vnstock
-from itertools import combinations
-import streamlit as st
+import warnings
 
-def run(tickers, benchmark_symbol, start_date, end_date):
-    def get_first_trading_day(df):
-        df = df.copy()
-        df.index = pd.to_datetime(df.index)
-        df = df.sort_index()
-        return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0])
+def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
+        rf, A, total_capital,
+        y_min=0.6, y_max=0.9):
 
-    def get_stock_data(ticker):
-        try:
-            stock = Vnstock().stock(symbol=ticker, source='VCI')
-            df = stock.quote.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
+    if not hrp_result_dict:
+        raise ValueError("No valid HRP-CVaR results from Block G.")
 
-            if df.empty:
-                raise ValueError("Empty DataFrame")
+    # --- Select best portfolio by Sharpe Ratio ---
+    best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
+    best_portfolio = hrp_result_dict[best_key]
+    tickers = list(best_portfolio['Weights'].keys())
+    weights = np.array(list(best_portfolio['Weights'].values()))
+    portfolio_name = best_key
 
-            required_cols = {'time', 'close', 'volume'}
-            if not required_cols.issubset(df.columns):
-                raise ValueError(f"Missing columns: {required_cols - set(df.columns)}")
+    mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
+    cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
 
-            df['time'] = pd.to_datetime(df['time'])
-            df.set_index('time', inplace=True)
-            df = df[['open', 'high', 'low', 'close', 'volume']]
-            df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-            return df
-        except Exception as e:
-            st.warning(f"⚠️ {ticker}: failed to load - {e}")
-            return pd.DataFrame()
+    sigma_p = np.sqrt(weights.T @ cov @ weights)
+    mu_p = np.dot(weights, mu)
 
-    def load_all_monthly_data(tickers_list):
-        stock_data = []
-        failed_tickers = []
-        for ticker in tickers_list:
-            df = get_stock_data(ticker)
-            if df.empty:
-                failed_tickers.append(ticker)
-                continue
-            df_monthly = get_first_trading_day(df)
-            df_monthly['time'] = df_monthly.index
-            df_monthly['Ticker'] = ticker
-            stock_data.append(df_monthly.reset_index(drop=True))
-        if failed_tickers:
-            st.warning(f"Some tickers failed to load: {', '.join(failed_tickers)}")
-        return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
+    y_opt = (mu_p - rf) / (A * sigma_p ** 2)
+    y_capped = np.clip(y_opt, y_min, y_max)
+    expected_rc = y_capped * mu_p + (1 - y_capped) * rf
+    sigma_c = y_capped * sigma_p
+    utility = expected_rc - 0.5 * A * sigma_c ** 2
 
-    data_stocks = load_all_monthly_data(tickers)
-    data_benchmark = load_all_monthly_data([benchmark_symbol])
+    capital_risky = y_capped * total_capital
+    capital_rf = total_capital - capital_risky
 
-    if data_stocks.empty or data_benchmark.empty:
-        raise ValueError("No valid stock or benchmark data is available.")
+    capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
-    def compute_monthly_return(df):
-        df = df.sort_values(['Ticker', 'time'])
-        df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
-        return df.dropna(subset=['Return'])
+    portfolio_info = {
+        'portfolio_name': portfolio_name,
+        'mu': mu_p,
+        'sigma': sigma_p,
+        'rf': rf,
+        'y_opt': y_opt,
+        'y_capped': y_capped,
+        'A': A,
+        'expected_rc': expected_rc,
+        'sigma_c': sigma_c,
+        'utility': utility,
+        'capital_risky': capital_risky,
+        'capital_rf': capital_rf
+    }
 
-    returns_stocks = compute_monthly_return(data_stocks)
-    returns_benchmark = compute_monthly_return(data_benchmark)
-    returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
-
-    returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
-    returns_stocks = returns_stocks.sort_values('time')  # ensure time order
-
-    returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
-    returns_benchmark.set_index('time', inplace=True)
-
-    portfolio_combinations = list(combinations(tickers, 3))
-    portfolio_labels = ['-'.join(p) for p in portfolio_combinations]
-
-    return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_labels
+    return (best_portfolio, y_capped, capital_alloc,
+            sigma_c, expected_rc, weights, tickers,
+            portfolio_info, None, cov, mu, y_opt)
