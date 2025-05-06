@@ -13,10 +13,16 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
 
     # --- Select best portfolio by Sharpe Ratio ---
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
-    best_portfolio = hrp_result_dict[best_key]
+    best_portfolio = hrp_result_dict[best_key].copy()
+
     tickers = list(best_portfolio['Weights'].keys())
     weights = np.array(list(best_portfolio['Weights'].values()))
-    portfolio_name = best_key
+
+    # Convert portfolio label to readable format
+    if isinstance(best_key, tuple):
+        portfolio_name = '-'.join(best_key)
+    else:
+        portfolio_name = str(best_key)
 
     mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
     cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
@@ -36,13 +42,13 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
     portfolio_info = {
-        'Portfolio Name': '-'.join(portfolio_name) if isinstance(portfolio_name, tuple) else portfolio_name,
+        'portfolio_name': portfolio_name,
         'mu': mu_p,
         'sigma': sigma_p,
         'rf': rf,
         'y_opt': y_opt,
         'y_capped': y_capped,
-        'Risk Aversion (A)': A,
+        'A': A,
         'expected_rc': expected_rc,
         'sigma_c': sigma_c,
         'utility': utility,
