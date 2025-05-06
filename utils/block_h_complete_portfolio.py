@@ -8,9 +8,9 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         y_min=0.6, y_max=0.9):
 
     if not hrp_cvar_results:
-        raise ValueError("❌ No valid HRP-CVaR results from Block G.")
+        raise ValueError("No valid HRP-CVaR results from Block G.")
 
-    # --- Chọn danh mục tốt nhất theo Sharpe Ratio ---
+    # --- Select best portfolio by Sharpe Ratio ---
     best_portfolio = max(hrp_cvar_results, key=lambda x: x['Sharpe Ratio'])
     tickers = list(best_portfolio['Weights'].keys())
     weights_hrp = np.array(list(best_portfolio['Weights'].values()))
@@ -19,11 +19,11 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
     mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
     cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
 
-    # --- Simulate Scenarios ---
+    # --- Simulate returns ---
     np.random.seed(42)
     simulated_returns = np.random.multivariate_normal(mean=mu, cov=cov, size=n_simulations)
 
-    # --- Optimization Variables ---
+    # --- CVaR Optimization ---
     w = cp.Variable(len(tickers))
     VaR = cp.Variable()
     z = cp.Variable(n_simulations)
@@ -45,16 +45,15 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
     problem.solve(solver='SCS')
 
     if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
-        raise ValueError("❌ Complete portfolio optimization failed.")
+        raise ValueError("Complete portfolio optimization failed.")
 
-    # --- Extract Optimal Portfolio Info ---
+    # --- Results ---
     w_opt = w.value
     mu_p = float(mu @ w_opt)
     sigma_p = np.sqrt(w_opt.T @ cov @ w_opt)
     losses = -simulated_returns @ w_opt
     cvar_p = float(VaR.value + np.mean(np.maximum(losses - VaR.value, 0)) / (1 - alpha_cvar))
 
-    # --- Capital Allocation: y* ---
     y_opt = (mu_p - rf) / (A * sigma_p**2)
     y_capped = max(y_min, min(y_opt, y_max))
 
@@ -66,17 +65,33 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
     capital_rf = total_capital - capital_risky
     capital_alloc = {tickers[i]: capital_risky * w_opt[i] for i in range(len(tickers))}
 
-    # --- Logging ---
-    print(f"\n📌 Selected Portfolio: {portfolio_name}")
+    # --- Return structured output ---
+    portfolio_info = {
+        "portfolio_name": portfolio_name,
+        "mu_p": mu_p,
+        "sigma_p": sigma_p,
+        "rf": rf,
+        "y_opt": y_opt,
+        "y_capped": y_capped,
+        "A": A,
+        "expected_rc": expected_rc,
+        "sigma_c": sigma_c,
+        "utility": utility,
+        "capital_rf": capital_rf,
+        "capital_risky": capital_risky,
+        "capital_alloc": capital_alloc
+    }
+
+    print(f"Selected Portfolio: {portfolio_name}")
     print(f"[CHECK] mu: {mu_p:.4f}, sigma: {sigma_p * 100:.4f}%, rf: {rf:.4f}")
     print(f"[CHECK] y_opt: {y_opt:.4f}, final y: {y_capped:.4f}")
-    print(f"🎯 Risk Aversion (A): {A}")
-    print(f"📊 Expected Return (E_rc): {expected_rc:.4f}")
-    print(f"📉 Portfolio Risk (σ_c): {sigma_c:.4f}")
-    print(f"💡 Utility (U): {utility:.4f}")
-    print(f"💰 Capital: Risk-Free = {capital_rf:,.0f} VND | Risky = {capital_risky:,.0f} VND")
+    print(f"Risk Aversion (A): {A}")
+    print(f"Expected Return (E_rc): {expected_rc:.4f}")
+    print(f"Portfolio Risk (sigma_c): {sigma_c:.4f}")
+    print(f"Utility (U): {utility:.4f}")
+    print(f"Capital: Risk-Free = {capital_rf:,.0f} VND | Risky = {capital_risky:,.0f} VND")
     for t, val in capital_alloc.items():
-        print(f"   • {t}: {val:,.0f} VND")
+        print(f"  - {t}: {val:,.0f} VND")
 
     return (
         best_portfolio,
@@ -85,5 +100,10 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         sigma_c,
         expected_rc,
         w_opt,
-        tickers
+        tickers,
+        portfolio_info,
+        simulated_returns,
+        cov,
+        mu,
+        y_opt
     )
