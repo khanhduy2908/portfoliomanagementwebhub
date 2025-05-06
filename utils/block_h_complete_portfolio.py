@@ -10,8 +10,7 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         y_min=0.6, y_max=0.9):
 
     if not hrp_cvar_results:
-        st.error("❌ No valid HRP-CVaR results from Block G. Please check earlier blocks for data/model issues.")
-        return None, None, None, None, None, None, None, None, None, None, None, None
+        raise ValueError("No valid HRP-CVaR results from Block G.")
 
     # --- Select best portfolio by Sharpe Ratio ---
     best_key = max(hrp_cvar_results, key=lambda k: hrp_cvar_results[k]['Sharpe Ratio'])
@@ -49,8 +48,7 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
     problem.solve(solver='SCS')
 
     if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
-        st.error("❌ Complete portfolio optimization failed. Please review return and risk inputs.")
-        return None, None, None, None, None, None, None, None, None, None, None, None
+        raise ValueError("Complete portfolio optimization failed.")
 
     # --- Results ---
     w_opt = w.value
@@ -102,6 +100,7 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         "Allocated Capital (VND)": list(capital_alloc.values())
     })
     st.dataframe(alloc_df.style.format({"Allocated Capital (VND)": "{:,.0f}"}), use_container_width=True)
+
 
     return (
         best_portfolio,
