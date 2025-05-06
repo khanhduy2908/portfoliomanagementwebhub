@@ -23,8 +23,8 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     else:
         portfolio_name = str(best_key)
 
-    mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
-    cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
+    mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
+    cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
 
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = np.dot(weights, mu)
