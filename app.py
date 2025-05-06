@@ -110,7 +110,14 @@ if run_analysis:
                 weights, tickers_portfolio,
                 config.start_date, config.end_date, config.rf
             )
-            st.success("Block I1 & I2 – Performance and benchmark visualizations generated.")
+            block_e3_visualization.run(
+                hrp_cvar_results,
+                adj_returns_combinations,
+                cov_matrix_dict,
+                config.rf,
+                config.A
+            )
+            st.success("Block I1 I2 I3 – Performance and benchmark visualizations generated.")
 
             block_j_stress_testing.run(
                 best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
