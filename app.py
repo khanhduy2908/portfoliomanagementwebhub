@@ -90,7 +90,8 @@ if run_analysis:
             st.success("Block E – Portfolio feasibility check completed.")
 
             # F
-            walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df)
+            factor_cols = ['Return_Close', 'Return_Volume', 'Spread_HL', 'Volatility_Close', 'Ticker_Encoded']
+            walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df, factor_cols)
             st.success("Block F – Forecast model backtesting completed.")
 
             # G
