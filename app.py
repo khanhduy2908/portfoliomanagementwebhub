@@ -47,6 +47,8 @@ end_user = st.sidebar.date_input("End date", value=datetime.date.today())
 rf_user = st.sidebar.number_input("Annual risk-free rate (%)", value=9.0) / 100
 capital_user = st.sidebar.number_input("Total capital (VND)", value=750_000_000)
 risk_score_user = st.sidebar.slider("Risk tolerance score (10–40)", min_value=10, max_value=40, value=25)
+config.A = map_risk_score_to_A(risk_score_user)
+st.sidebar.markdown(f"**Risk Profile**: {get_risk_profile_description(risk_score_user)}")
 def map_risk_score_to_A(score):
     if 10 <= score <= 17:
         return 30 
