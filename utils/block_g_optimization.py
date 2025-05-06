@@ -120,5 +120,6 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
     sigma_list = [res['Volatility (%)'] for res in hrp_cvar_results]
     sharpe_list = [res['Sharpe Ratio'] for res in hrp_cvar_results]
     results_ef = (mu_list, sigma_list, sharpe_list)
+    hrp_result_dict = {x['Portfolio']: x for x in hrp_cvar_results}
+    return hrp_result_dict, results_ef
 
-    return hrp_cvar_results, results_ef
