@@ -121,13 +121,3 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
         print(error_by_stock[best_combo].round(4))
 
     return walkforward_df, error_by_stock
-# Kiểm tra các cột trong features_df
-st.subheader("📋 DEBUG: Các cột trong features_df")
-st.write(features_df.columns.tolist())
-
-# Kiểm tra xem các cột cần thiết có tồn tại không
-missing_cols = [col for col in factor_cols if col not in features_df.columns]
-if missing_cols:
-    st.error(f"❌ Các cột sau đang thiếu trong features_df: {missing_cols}")
-else:
-    st.success("✅ Tất cả các cột factor_cols đều có trong features_df.")
