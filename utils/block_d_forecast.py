@@ -3,7 +3,6 @@
 import os
 import pandas as pd
 import numpy as np
-import shap
 import warnings
 import optuna
 import lightgbm as lgb
@@ -42,10 +41,12 @@ def construct_dataset(df_combo, subset):
     for ticker in subset:
         df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
         for i in range(lookback, len(df_ticker)):
-            window = df_ticker[feature_cols].iloc[i-lookback:i].values.flatten()
-            target = df_ticker['Return_Close'].iloc[i]
-            X.append(window)
-            y.append(target)
+            row_window = []
+            for t in reversed(range(lookback)):
+                for col in feature_cols:
+                    row_window.append(df_ticker[col].iloc[i - t])
+            X.append(row_window)
+            y.append(df_ticker['Return_Close'].iloc[i])
     return np.array(X), np.array(y)
 
 def train_stacked_model(X, y, n_folds=5):
@@ -154,7 +155,7 @@ def run(data_stocks, selected_tickers, selected_combinations):
             'scaler': scaler,
             'base_models': base_models[-1],
             'meta_model': meta_model,
-            'features': [f"{col}_t-{t}" for col in feature_cols for t in reversed(range(lookback))]
+            'features': [f"{col}_t-{t}" for t in reversed(range(lookback)) for col in feature_cols]
         }
 
         adj_returns_combinations[combo] = adj_return_dict
