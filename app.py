@@ -22,34 +22,34 @@ from utils import (
     block_j_stress_testing
 )
 
-# --- Load valid tickers ---
-with open("utils/valid_tickers.txt", "r") as f:
-    valid_tickers = sorted([line.strip() for line in f if line.strip()])
-
-# --- Streamlit Page Config ---
-st.set_page_config(page_title="Institutional Portfolio Optimization", layout="wide")
-st.title("Institutional Portfolio Optimization Platform")
-
-# --- Helper functions ---
+# --- Helper Functions ---
 def map_risk_score_to_A(score):
     if 10 <= score <= 17:
-        return 30
+        return 30  # Low risk tolerance
     elif 18 <= score <= 27:
-        return 15
+        return 15  # Medium
     elif 28 <= score <= 40:
-        return 5
+        return 5   # High
     else:
         raise ValueError("Risk score must be between 10 and 40.")
 
 def get_risk_profile_description(score):
     if 10 <= score <= 17:
-        return "Low – Focus on capital preservation. Suitable for bonds, deposits, and stable dividend stocks."
+        return "Low – Capital preservation focus (e.g., bonds, deposits)"
     elif 18 <= score <= 27:
-        return "Moderate – Balanced mix of stocks and bonds, aiming for growth and stability."
+        return "Medium – Balanced growth and preservation"
     elif 28 <= score <= 40:
-        return "High – Aggressive investor seeking high returns from growth stocks and riskier products."
+        return "High – Growth focus (e.g., stocks, high-risk assets)"
     else:
-        return "Invalid score."
+        return "Undefined"
+
+# --- Load valid tickers ---
+with open("utils/valid_tickers.txt", "r") as f:
+    valid_tickers = sorted([line.strip() for line in f if line.strip()])
+
+# --- Streamlit Config ---
+st.set_page_config(page_title="Institutional Portfolio Optimization", layout="wide")
+st.title("Institutional Portfolio Optimization Platform")
 
 # --- Sidebar Inputs ---
 st.sidebar.header("User Configuration")
@@ -66,7 +66,6 @@ rf_user = st.sidebar.number_input("Annual risk-free rate (%)", value=9.0) / 100
 capital_user = st.sidebar.number_input("Total capital (VND)", value=750_000_000)
 
 risk_score_user = st.sidebar.slider("Risk tolerance score (10–40)", min_value=10, max_value=40, value=25)
-config.A = map_risk_score_to_A(risk_score_user)
 st.sidebar.markdown(f"**Risk Profile**: {get_risk_profile_description(risk_score_user)}")
 
 strategy_options = {
@@ -75,7 +74,8 @@ strategy_options = {
     "Top 5 from strongest clusters": "strongest_clusters"
 }
 selection_strategy = st.sidebar.selectbox("Factor selection strategy", list(strategy_options.keys()))
-run_analysis = st.sidebar.button("Run Portfolio Optimization")
+
+run_analysis = st.sidebar.button("🚀 Run Portfolio Optimization")
 
 # --- Assign config values ---
 config.tickers = tickers_user
@@ -85,6 +85,8 @@ config.end_date = pd.to_datetime(end_user)
 config.rf_annual = rf_user * 100
 config.rf = rf_user / 12
 config.total_capital = capital_user
+config.A = map_risk_score_to_A(risk_score_user)
+config.risk_score = risk_score_user  # ✅ NEW
 config.factor_selection_strategy = strategy_options[selection_strategy]
 
 # --- Input validation ---
