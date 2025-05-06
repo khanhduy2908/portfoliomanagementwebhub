@@ -83,16 +83,22 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         "capital_alloc": capital_alloc
     }
 
-    print(f"Selected Portfolio: {portfolio_name}")
-    print(f"[CHECK] mu: {mu_p:.4f}, sigma: {sigma_p * 100:.4f}%, rf: {rf:.4f}")
-    print(f"[CHECK] y_opt: {y_opt:.4f}, final y: {y_capped:.4f}")
-    print(f"Risk Aversion (A): {A}")
-    print(f"Expected Return (E_rc): {expected_rc:.4f}")
-    print(f"Portfolio Risk (sigma_c): {sigma_c:.4f}")
-    print(f"Utility (U): {utility:.4f}")
-    print(f"Capital: Risk-Free = {capital_rf:,.0f} VND | Risky = {capital_risky:,.0f} VND")
-    for t, val in capital_alloc.items():
-        print(f"  - {t}: {val:,.0f} VND")
+    st.subheader("Optimal Complete Portfolio Summary")
+    st.markdown(f"**Selected Portfolio**: `{portfolio_name}`")
+    st.markdown(f"- Risk Aversion (A): `{A}`")
+    st.markdown(f"- Expected Return (E(rc)): `{expected_rc:.4f}`")
+    st.markdown(f"- Portfolio Risk (σ_c): `{sigma_c:.4f}`")
+    st.markdown(f"- Utility (U): `{utility:.4f}`")
+    st.markdown(f"- Risk-Free Capital: `{capital_rf:,.0f} VND`")
+    st.markdown(f"- Risky Capital: `{capital_risky:,.0f} VND`")
+    st.markdown("**Capital Allocation to Risky Assets:**")
+
+    alloc_df = pd.DataFrame({
+        "Ticker": list(capital_alloc.keys()),
+        "Allocated Capital (VND)": list(capital_alloc.values())
+    })
+    st.dataframe(alloc_df.style.format({"Allocated Capital (VND)": "{:,.0f}"}), use_container_width=True)
+
 
     return (
         best_portfolio,
