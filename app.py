@@ -44,6 +44,12 @@ end_user = st.sidebar.date_input("End date", value=datetime.date.today())
 rf_user = st.sidebar.number_input("Annual risk-free rate (%)", value=9.0) / 100
 capital_user = st.sidebar.number_input("Total capital (VND)", value=750_000_000)
 A_user = st.sidebar.slider("Risk aversion coefficient (A)", min_value=10, max_value=40, value=15)
+strategy_options = {
+    "Top 2 from each cluster": "top5_by_cluster",
+    "Top 5 overall": "top5_overall",
+    "Top 5 from strongest clusters": "strongest_clusters"
+}
+selection_strategy = st.sidebar.selectbox("Factor selection strategy", list(strategy_options.keys()))
 
 run_analysis = st.sidebar.button("🚀 Run Portfolio Optimization")
 
@@ -56,6 +62,7 @@ config.rf_annual = rf_user * 100
 config.rf = rf_user / 12
 config.total_capital = capital_user
 config.A = A_user
+config.factor_selection_strategy = strategy_options[selection_strategy]
 
 # --- Input validation ---
 if not config.tickers or config.benchmark_symbol is None:
