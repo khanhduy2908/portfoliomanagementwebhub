@@ -5,8 +5,6 @@ import matplotlib.cm as cm
 from matplotlib.colors import Normalize
 import streamlit as st
 
-plt.style.use('dark_background')
-
 def run(data_stocks, data_benchmark, benchmark_symbol,
         weights, tickers_portfolio,
         start_date, end_date, rf):
@@ -45,24 +43,27 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
     sharpe_p = (mean_p - rf * 12) / vol_p if vol_p > 0 else np.nan
     sharpe_b = (mean_b - rf * 12) / vol_b if vol_b > 0 else np.nan
 
-    # Layout: 2 columns
     col1, col2 = st.columns(2)
 
-    # --- Chart 1: Cumulative Return ---
+    # === Chart 1: Cumulative Return ===
     with col1:
-        fig1, ax1 = plt.subplots(figsize=(6, 4))
+        fig1, ax1 = plt.subplots(figsize=(6, 4), facecolor='#1e1e1e')
         ax1.plot(cum_portfolio.index, cum_portfolio * 100, label='Portfolio', color='dodgerblue', linewidth=2)
         ax1.plot(cum_benchmark.index, cum_benchmark * 100, label=benchmark_symbol, color='crimson', linewidth=2)
-        ax1.set_title("Cumulative Return")
-        ax1.set_ylabel("Cumulative Return (%)")
-        ax1.set_xlabel("Time")
-        ax1.legend(fontsize=8)
+
+        ax1.set_title("Cumulative Return", color='white')
+        ax1.set_ylabel("Cumulative Return (%)", color='white')
+        ax1.set_xlabel("Time", color='white')
+        ax1.legend(fontsize=8, facecolor='#1e1e1e', labelcolor='white')
         ax1.grid(True, alpha=0.3)
+        ax1.tick_params(colors='white')
+        ax1.set_facecolor('#1e1e1e')
+
         st.pyplot(fig1)
 
-    # --- Chart 2: Risk vs Return Bubble ---
+    # === Chart 2: Risk vs Return Bubble ===
     with col2:
-        fig2, ax2 = plt.subplots(figsize=(6, 4))
+        fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor='#1e1e1e')
 
         labels = ['Portfolio', benchmark_symbol]
         vols = [vol_p, vol_b]
@@ -77,7 +78,8 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
             x = vols[i] * 100
             y = rets[i] * 100
             color = colors[i]
-            ax2.scatter(x, y, s=1000, c=[color], edgecolors='white')
+
+            ax2.scatter(x, y, s=1000, c=[color], edgecolors='white', linewidths=1.5)
 
             luminance = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
             text_color = 'black' if luminance > 0.6 else 'white'
@@ -92,14 +94,18 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
                 weight='bold'
             )
 
-        ax2.set_title("Risk vs Return (Annualized)")
-        ax2.set_xlabel("Volatility (%)")
-        ax2.set_ylabel("Return (%)")
+        ax2.set_title("Risk vs Return (Annualized)", color='white')
+        ax2.set_xlabel("Volatility (%)", color='white')
+        ax2.set_ylabel("Return (%)", color='white')
+        ax2.tick_params(colors='white')
         ax2.grid(True, alpha=0.3)
+        ax2.set_facecolor('#1e1e1e')
 
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         cbar = plt.colorbar(sm, ax=ax2)
-        cbar.set_label('Sharpe Ratio')
+        cbar.set_label('Sharpe Ratio', color='white')
+        cbar.ax.yaxis.set_tick_params(color='white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
 
         st.pyplot(fig2)
