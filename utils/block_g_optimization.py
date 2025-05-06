@@ -73,7 +73,8 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                     if prob.status in ['optimal', 'optimal_inaccurate']:
                         success = True
                         break
-                except:
+                except Exception as e:
+                    warnings.warn(f"[{combo}] Solver {solver} failed: {e}")
                     continue
 
             if not success or w.value is None:
@@ -103,7 +104,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             })
 
         except Exception as e:
-            warnings.warn(f"[{combo}] ❌ {e}")
+            warnings.warn(f"[{combo}] ❌ Unexpected error: {e}")
             continue
 
     # --- Output Table ---
@@ -120,6 +121,6 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
     sigma_list = [res['Volatility (%)'] for res in hrp_cvar_results]
     sharpe_list = [res['Sharpe Ratio'] for res in hrp_cvar_results]
     results_ef = (mu_list, sigma_list, sharpe_list)
+
     hrp_result_dict = {x['Portfolio']: x for x in hrp_cvar_results}
     return hrp_result_dict, results_ef
-
