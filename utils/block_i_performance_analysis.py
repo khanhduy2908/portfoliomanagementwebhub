@@ -11,15 +11,16 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         data_stocks, data_benchmark, benchmark_symbol,
         weights, tickers_portfolio, start_date, end_date):
 
-    # Align date index
-    num_months = returns_pivot_stocks.shape[0]
-    date_range = pd.date_range(start=start_date, periods=num_months, freq='MS')
+    # === Reconstruct index based on start_date & end_date ===
+    date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
+    returns_pivot_stocks = returns_pivot_stocks.iloc[:len(date_range)].copy()
+    returns_benchmark = returns_benchmark.iloc[:len(date_range)].copy()
+    returns_pivot_stocks.index = date_range
+    returns_benchmark.index = date_range
 
+    # Calculate portfolio & benchmark returns
     portfolio_returns_df = returns_pivot_stocks[tickers_portfolio].copy()
     benchmark_returns_df = returns_benchmark.copy()
-
-    portfolio_returns_df.index = date_range
-    benchmark_returns_df.index = date_range
 
     portfolio_returns = portfolio_returns_df @ weights
     benchmark_returns = benchmark_returns_df['Benchmark_Return']
