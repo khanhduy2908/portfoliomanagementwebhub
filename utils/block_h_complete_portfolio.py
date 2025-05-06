@@ -2,49 +2,48 @@
 
 import numpy as np
 import pandas as pd
-import warnings
+import config
 
-def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
-        rf, A, total_capital,
-        y_min=0.6, y_max=0.9):
-
+def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict):
     if not hrp_result_dict:
         raise ValueError("No valid HRP-CVaR results from Block G.")
 
     # --- Select best portfolio by Sharpe Ratio ---
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
-    tickers = list(best_portfolio['Weights'].keys())
-    weights = np.array(list(best_portfolio['Weights'].values()))
 
-    # --- Convert portfolio name to readable string ---
+    # Convert tuple key to readable string
     if isinstance(best_key, tuple):
-        portfolio_name = '-'.join(best_key)
+        portfolio_name = " - ".join(best_key)
+        tickers = list(best_key)
     else:
-        portfolio_name = str(best_key)
+        portfolio_name = best_key
+        tickers = best_key.split("-")
 
-    # --- Extract return vector and covariance matrix ---
-    try:
-        mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
-        cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
-    except Exception as e:
-        raise ValueError(f"Portfolio combination mismatch: {e}")
+    weights = np.array(list(best_portfolio['Weights'].values()))
+    mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
+    cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
 
+    # --- Risky portfolio statistics ---
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = np.dot(weights, mu)
 
-    # --- Compute complete portfolio allocation ---
+    # --- Capital allocation using utility maximization ---
+    rf = config.rf
+    A = config.A
     y_opt = (mu_p - rf) / (A * sigma_p ** 2)
-    y_capped = np.clip(y_opt, y_min, y_max)
+    y_capped = np.clip(y_opt, config.y_min, config.y_max)
+
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c ** 2
 
+    total_capital = config.total_capital
     capital_risky = y_capped * total_capital
     capital_rf = total_capital - capital_risky
-
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
+    # --- Package output ---
     portfolio_info = {
         'portfolio_name': portfolio_name,
         'mu': mu_p,
@@ -60,6 +59,8 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         'capital_rf': capital_rf
     }
 
-    return (best_portfolio, y_capped, capital_alloc,
-            sigma_c, expected_rc, weights, tickers,
-            portfolio_info, None, cov, mu, y_opt)
+    return (
+        best_portfolio, y_capped, capital_alloc,
+        sigma_c, expected_rc, weights, tickers,
+        portfolio_info, None, cov, mu, y_opt
+    )
