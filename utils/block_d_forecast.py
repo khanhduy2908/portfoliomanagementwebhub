@@ -1,18 +1,22 @@
-import pandas as pd
-import numpy as np
-import shap
+import os
+import joblib
+import hashlib
 import warnings
-import optuna
+import numpy as np
+import pandas as pd
 import lightgbm as lgb
 import xgboost as xgb
+import torch
+import shap
+import optuna
 import matplotlib.pyplot as plt
-from sklearn.linear_model import RidgeCV
-from sklearn.metrics import mean_absolute_error
-from sklearn.model_selection import train_test_split, KFold
-from sklearn.preprocessing import StandardScaler
+
 from pytorch_tabnet.tab_model import TabNetRegressor
 from pytorch_tabnet.callbacks import EarlyStopping
-import torch
+from sklearn.linear_model import RidgeCV
+from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")
 
@@ -79,7 +83,6 @@ def train_stacked_model(X, y, n_folds=5):
             )]
         )
         oof_preds_tab.append(model_tab.predict(X_valid).squeeze())
-
         base_models.append((model_lgb, model_xgb, model_tab))
 
     X_meta = np.column_stack((np.concatenate(oof_preds_lgb),
@@ -88,6 +91,10 @@ def train_stacked_model(X, y, n_folds=5):
     y_meta = y[-X_meta.shape[0]:]
     meta_model = RidgeCV(alphas=np.logspace(-3, 3, 7)).fit(X_meta, y_meta)
     return base_models, meta_model
+
+def get_model_path(combo):
+    hash_id = hashlib.md5(combo.encode()).hexdigest()
+    return f"saved_models/stacked_{hash_id}.pkl"
 
 def run(data_stocks, selected_tickers, selected_combinations):
     features_all = []
@@ -124,11 +131,28 @@ def run(data_stocks, selected_tickers, selected_combinations):
             print(f"⚠️ Skipping {combo}: not enough data.")
             continue
 
-        scaler = StandardScaler()
-        X = scaler.fit_transform(X_raw)
+        model_path = get_model_path(combo)
 
-        base_models, meta_model = train_stacked_model(X, y)
+        if os.path.exists(model_path):
+            model_data = joblib.load(model_path)
+            base_models = model_data['base_models']
+            meta_model = model_data['meta_model']
+            scaler = model_data['scaler']
+            print(f"✅ Loaded cached model for {combo}")
+        else:
+            scaler = StandardScaler()
+            X = scaler.fit_transform(X_raw)
+            base_models, meta_model = train_stacked_model(X, y)
 
+            joblib.dump({
+                'base_models': base_models,
+                'meta_model': meta_model,
+                'scaler': scaler
+            }, model_path)
+            print(f"✅ Trained and saved model for {combo}")
+
+        # Dự báo lại
+        X = scaler.transform(X_raw)
         pred_lgb = base_models[-1][0].predict(X)
         pred_xgb = base_models[-1][1].predict(X)
         pred_tab = base_models[-1][2].predict(X).squeeze()
@@ -146,6 +170,6 @@ def run(data_stocks, selected_tickers, selected_combinations):
         }
 
         mae = mean_absolute_error(y[-len(final_pred):], final_pred)
-        print(f"✅ {combo} | Final MAE (Stacked): {mae:.4f}")
+        print(f"📊 {combo} | Final MAE (Stacked): {mae:.4f}")
 
     return adj_returns_combinations, model_store, features_df
