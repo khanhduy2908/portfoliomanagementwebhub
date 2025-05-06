@@ -14,23 +14,23 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     # --- Select best portfolio by Sharpe Ratio ---
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
-
-    # Convert key string back to list of tickers for display and indexing
-    tickers = best_key.split('-')
+    tickers = list(best_portfolio['Weights'].keys())
     weights = np.array(list(best_portfolio['Weights'].values()))
-    portfolio_name_display = ', '.join(tickers)  # for readable display
 
-    # Retrieve expected returns and covariance matrix
-    mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
-    cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
+    # Format portfolio name to readable style
+    if isinstance(best_key, tuple):
+        portfolio_name = '-'.join(best_key)
+    else:
+        portfolio_name = str(best_key)
 
-    # --- Calculate Optimal Complete Portfolio ---
+    mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
+    cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
+
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = np.dot(weights, mu)
 
     y_opt = (mu_p - rf) / (A * sigma_p ** 2)
     y_capped = np.clip(y_opt, y_min, y_max)
-
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c ** 2
@@ -41,7 +41,7 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
     portfolio_info = {
-        'portfolio_name': portfolio_name_display,
+        'portfolio_name': portfolio_name,
         'mu': mu_p,
         'sigma': sigma_p,
         'rf': rf,
