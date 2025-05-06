@@ -1,3 +1,5 @@
+# utils/block_a_data.py
+
 import warnings
 import pandas as pd
 from vnstock import Vnstock
@@ -27,7 +29,7 @@ def run(tickers, benchmark_symbol, start_date, end_date):
             df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
             return df
         except Exception as e:
-            warnings.warn(f"[{ticker}] Failed to load data: {e}")
+            warnings.warn(f"{ticker}: Data loading failed: {e}")
             return pd.DataFrame()
 
     def load_all_monthly_data(tickers_list):
@@ -37,7 +39,6 @@ def run(tickers, benchmark_symbol, start_date, end_date):
             if df.empty:
                 continue
             df_monthly = get_first_trading_day(df)
-            df_monthly = df_monthly.copy()
             df_monthly['time'] = pd.to_datetime(df_monthly.index)
             df_monthly = df_monthly.reset_index(drop=True)
             df_monthly['Ticker'] = ticker
@@ -48,11 +49,11 @@ def run(tickers, benchmark_symbol, start_date, end_date):
     data_benchmark = load_all_monthly_data([benchmark_symbol])
 
     if data_stocks.empty or data_benchmark.empty:
-        raise ValueError("❌ Không có dữ liệu hợp lệ cho cổ phiếu hoặc benchmark.")
+        raise ValueError("No valid stock or benchmark data is available.")
 
     def compute_monthly_return(df):
         if 'Ticker' not in df.columns or 'Close' not in df.columns or 'time' not in df.columns:
-            raise ValueError("❌ Thiếu cột cần thiết trong dữ liệu đầu vào.")
+            raise ValueError("Missing required columns in input data.")
         df = df.sort_values(['Ticker', 'time'])
         df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
         return df.dropna(subset=['Return'])
