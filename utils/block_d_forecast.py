@@ -48,7 +48,7 @@ def construct_dataset(df_combo, subset):
     return np.array(X), np.array(y)
 
 def train_stacked_model(X, y, n_folds=5):
-    kf = KFold(n_splits=n_folds, shuffle=False)
+    kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
     oof_preds_lgb, oof_preds_xgb, oof_preds_tab = [], [], []
     base_models = []
 
@@ -64,22 +64,27 @@ def train_stacked_model(X, y, n_folds=5):
         model_xgb.fit(X_train, y_train)
         oof_preds_xgb.append(model_xgb.predict(X_valid))
 
-        model_tab = TabNetRegressor(seed=42)
-        model_tab.fit(
-            X_train, y_train.reshape(-1, 1),
-            eval_set=[(X_valid, y_valid.reshape(-1, 1))],
-            eval_metric=['mae'],
-            patience=10,
-            max_epochs=100,
-            batch_size=256,
-            virtual_batch_size=128,
-            callbacks=[EarlyStopping(
+        try:
+            model_tab = TabNetRegressor(seed=42)
+            model_tab.fit(
+                X_train, y_train.reshape(-1, 1),
+                eval_set=[(X_valid, y_valid.reshape(-1, 1))],
+                eval_metric=['mae'],
                 patience=10,
-                early_stopping_metric='valid_mae',
-                is_maximize=False
-            )]
-        )
-        oof_preds_tab.append(model_tab.predict(X_valid).squeeze())
+                max_epochs=100,
+                batch_size=256,
+                virtual_batch_size=128,
+                callbacks=[EarlyStopping(
+                    patience=10,
+                    early_stopping_metric='valid_mae',
+                    is_maximize=False
+                )]
+            )
+            oof_preds_tab.append(model_tab.predict(X_valid).squeeze())
+        except Exception as e:
+            model_tab = None
+            oof_preds_tab.append(np.zeros_like(y_valid))
+
         base_models.append((model_lgb, model_xgb, model_tab))
 
     X_meta = np.column_stack((np.concatenate(oof_preds_lgb),
@@ -98,7 +103,7 @@ def run(data_stocks, selected_tickers, selected_combinations):
         df_feat = engineer_features(df, ticker_id=i)
 
         if df_feat.empty or df_feat.shape[0] < lookback + 5:
-            print(f"⚠️ Ticker {ticker} skipped due to insufficient data.")
+            warnings.warn(f"⚠️ {ticker}: không đủ dữ liệu.")
             continue
 
         df_feat['Ticker'] = ticker
@@ -106,32 +111,31 @@ def run(data_stocks, selected_tickers, selected_combinations):
         valid_tickers.append(ticker)
 
     if not features_all:
-        raise ValueError("❌ No tickers with sufficient data for forecasting.")
+        raise ValueError("❌ Không có cổ phiếu nào đủ dữ liệu để dự báo.")
 
     features_df = pd.concat(features_all, ignore_index=True)
     os.makedirs("saved_models", exist_ok=True)
 
     for combo in selected_combinations:
-        subset = combo.split('-')
+        subset = tuple(combo)
         if not all(t in valid_tickers for t in subset):
             continue
 
-        combo_sorted = '-'.join(sorted(subset))
-        hash_key = hashlib.md5(combo_sorted.encode()).hexdigest()
+        combo_sorted_str = '-'.join(sorted(subset))
+        hash_key = hashlib.md5(combo_sorted_str.encode()).hexdigest()
         model_path = f"saved_models/stacked_{hash_key}.pkl"
 
         if os.path.exists(model_path):
             model_data = joblib.load(model_path)
-            adj_returns_combinations[combo] = model_data['adj_return']
-            model_store[combo] = model_data['model_store']
-            print(f"✅ Loaded saved model for {combo}.")
+            adj_returns_combinations[subset] = model_data['adj_return']
+            model_store[subset] = model_data['model_store']
             continue
 
         df_combo = features_df[features_df['Ticker'].isin(subset)].copy()
         X_raw, y = construct_dataset(df_combo, subset)
 
         if len(X_raw) < min_samples:
-            print(f"⚠️ Skipping {combo}: not enough samples.")
+            warnings.warn(f"⚠️ Bỏ qua {subset}: không đủ mẫu huấn luyện.")
             continue
 
         scaler = StandardScaler()
@@ -141,12 +145,17 @@ def run(data_stocks, selected_tickers, selected_combinations):
 
         pred_lgb = base_models[-1][0].predict(X)
         pred_xgb = base_models[-1][1].predict(X)
-        pred_tab = base_models[-1][2].predict(X).squeeze()
+        pred_tab = base_models[-1][2].predict(X).squeeze() if base_models[-1][2] else np.zeros_like(pred_lgb)
+
         X_stack = np.column_stack([pred_lgb, pred_xgb, pred_tab])
         final_pred = meta_model.predict(X_stack)
 
-        adj_return = final_pred[-len(subset):]
-        adj_return_dict = dict(zip(subset, adj_return))
+        adj_return_dict = {}
+        for t in subset:
+            idx = features_df[(features_df['Ticker'] == t)].index
+            if len(idx) == 0:
+                continue
+            adj_return_dict[t] = final_pred[idx[-1]]
 
         model_store_obj = {
             'scaler': scaler,
@@ -155,15 +164,12 @@ def run(data_stocks, selected_tickers, selected_combinations):
             'features': [f"{col}_t-{lag}" for lag in reversed(range(lookback)) for col in feature_cols]
         }
 
-        adj_returns_combinations[combo] = adj_return_dict
-        model_store[combo] = model_store_obj
+        adj_returns_combinations[subset] = adj_return_dict
+        model_store[subset] = model_store_obj
 
         joblib.dump({
             'adj_return': adj_return_dict,
             'model_store': model_store_obj
         }, model_path)
-
-        mae = mean_absolute_error(y[-len(final_pred):], final_pred)
-        print(f"✅ {combo} | Final MAE (Stacked): {mae:.4f}")
 
     return adj_returns_combinations, model_store, features_df
