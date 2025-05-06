@@ -13,7 +13,7 @@ def compute_factors(data_stocks, returns_benchmark):
     for ticker in data_stocks['Ticker'].unique():
         df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
         if df.shape[0] < 6:
-            warnings.warn(f"{ticker}: Không đủ dữ liệu.")
+            warnings.warn(f"{ticker}: Not enough data.")
             continue
 
         df['Return'] = df['Close'].pct_change() * 100
@@ -25,7 +25,7 @@ def compute_factors(data_stocks, returns_benchmark):
         merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
                           left_on='time', right_index=True, how='inner')
         if len(merged) < 10:
-            warnings.warn(f"{ticker}: Không đủ dữ liệu để tính beta.")
+            warnings.warn(f"{ticker}: Insufficient data to compute beta.")
             continue
 
         X = merged[['Benchmark_Return']]
@@ -38,7 +38,7 @@ def compute_factors(data_stocks, returns_benchmark):
         factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
 
     if not factor_data:
-        raise ValueError("❌ Không tính được yếu tố cho cổ phiếu nào.")
+        raise ValueError("No factors could be computed for any stock.")
     return pd.concat(factor_data, ignore_index=True)
 
 def optimize_weights(latest_data):
@@ -62,6 +62,7 @@ def optimize_weights(latest_data):
         )
         latest_data['Score'] = score
         return latest_data.nlargest(5, 'Score')['Return'].mean()
+
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=50)
     return study.best_params
@@ -72,7 +73,7 @@ def run(data_stocks, returns_benchmark):
     latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
 
     if latest_data.shape[0] < 5:
-        raise ValueError("❌ Không đủ cổ phiếu để lựa chọn từ dữ liệu tháng gần nhất.")
+        raise ValueError("Insufficient number of stocks for selection in the latest month.")
 
     factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
     scaler = StandardScaler()
@@ -100,7 +101,7 @@ def run(data_stocks, returns_benchmark):
     if strategy == 'top5_by_cluster':
         features = [f + '_S' for f in factor_cols]
         if latest_data.shape[0] < 3:
-            raise ValueError("❌ Không thể phân cụm vì không đủ cổ phiếu.")
+            raise ValueError("Not enough stocks for clustering.")
         kmeans = KMeans(n_clusters=min(3, latest_data.shape[0]), n_init=10, random_state=42)
         latest_data['Cluster'] = kmeans.fit_predict(latest_data[features])
         selected_df = (
@@ -116,7 +117,7 @@ def run(data_stocks, returns_benchmark):
     elif strategy == 'strongest_clusters':
         features = [f + '_S' for f in factor_cols]
         if latest_data.shape[0] < 3:
-            raise ValueError("❌ Không thể phân cụm vì không đủ cổ phiếu.")
+            raise ValueError("Not enough stocks for clustering.")
         kmeans = KMeans(n_clusters=min(3, latest_data.shape[0]), n_init=10, random_state=42)
         latest_data['Cluster'] = kmeans.fit_predict(latest_data[features])
         cluster_strength = latest_data.groupby('Cluster')['Score'].mean().sort_values(ascending=False)
@@ -124,7 +125,7 @@ def run(data_stocks, returns_benchmark):
         selected_df = latest_data[latest_data['Cluster'].isin(strongest_clusters)]
         selected_df = selected_df.sort_values('Score', ascending=False).head(5).reset_index(drop=True)
     else:
-        raise ValueError(f"❌ Unknown selection strategy: {strategy}")
+        raise ValueError(f"Unknown selection strategy: {strategy}")
 
     selected_tickers = selected_df['Ticker'].tolist()
     selected_combinations = list(combinations(selected_tickers, 3))
