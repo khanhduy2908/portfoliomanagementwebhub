@@ -46,9 +46,16 @@ start_user = st.sidebar.date_input("Start date", value=datetime.date(2020, 1, 1)
 end_user = st.sidebar.date_input("End date", value=datetime.date.today())
 rf_user = st.sidebar.number_input("Annual risk-free rate (%)", value=9.0) / 100
 capital_user = st.sidebar.number_input("Total capital (VND)", value=750_000_000)
-A_user = st.sidebar.slider("Risk aversion coefficient (A)", min_value=10, max_value=40, value=15)
-
-# Strategy selection
+risk_score_user = st.sidebar.slider("Risk tolerance score (10–40)", min_value=10, max_value=40, value=25)
+def map_risk_score_to_A(score):
+    if 10 <= score <= 17:
+        return 30 
+    elif 18 <= score <= 27:
+        return 15  
+    elif 28 <= score <= 40:
+        return 5  
+    else:
+        raise ValueError("Risk score must be between 10 and 40.")
 strategy_options = {
     "Top 2 from each cluster": "top5_by_cluster",
     "Top 5 overall": "top5_overall",
@@ -67,6 +74,7 @@ config.end_date = pd.to_datetime(end_user)
 config.rf_annual = rf_user * 100
 config.rf = rf_user / 12
 config.total_capital = capital_user
+A_user = map_risk_score_to_A(risk_score_user)
 config.A = A_user
 config.factor_selection_strategy = strategy_options[selection_strategy]
 
