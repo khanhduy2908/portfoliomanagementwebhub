@@ -20,9 +20,9 @@ def run(tickers, benchmark_symbol, start_date, end_date):
             if df.empty:
                 raise ValueError(f"{ticker}: Empty DataFrame")
 
-            required_cols = {'time', 'open', 'high', 'low', 'close', 'volume'}
+            required_cols = {'time', 'close', 'volume'}
             if not required_cols.issubset(df.columns):
-                raise ValueError(f"{ticker}: Missing columns: {required_cols - set(df.columns)}")
+                raise ValueError(f"{ticker}: Missing columns {required_cols - set(df.columns)}")
 
             df['time'] = pd.to_datetime(df['time'])
             df.set_index('time', inplace=True)
@@ -37,11 +37,17 @@ def run(tickers, benchmark_symbol, start_date, end_date):
         stock_data = []
         for ticker in tickers_list:
             df = get_stock_data(ticker)
-            if df.empty:
+            if df.empty or not {'Open', 'High', 'Low', 'Close', 'Volume'}.issubset(df.columns):
+                warnings.warn(f"{ticker}: Invalid or incomplete data, skipping.")
                 continue
             df_monthly = get_first_trading_day(df)
+            if df_monthly.empty:
+                warnings.warn(f"{ticker}: No monthly data after filtering.")
+                continue
+            df_monthly = df_monthly.reset_index(drop=True)
+            df_monthly['time'] = pd.to_datetime(df_monthly['time'])
             df_monthly['Ticker'] = ticker
-            stock_data.append(df_monthly.reset_index(drop=True))
+            stock_data.append(df_monthly)
         return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
 
     data_stocks = load_all_monthly_data(tickers)
@@ -51,8 +57,9 @@ def run(tickers, benchmark_symbol, start_date, end_date):
         raise ValueError("❌ No valid stock or benchmark data is available.")
 
     def compute_monthly_return(df):
-        if 'Ticker' not in df.columns or 'Close' not in df.columns or 'time' not in df.columns:
-            raise ValueError("❌ Missing required columns in input data.")
+        required = {'Ticker', 'Close', 'time'}
+        if not required.issubset(df.columns):
+            raise ValueError(f"❌ Missing required columns in input data. Found: {df.columns.tolist()}")
         df = df.sort_values(['Ticker', 'time'])
         df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
         return df.dropna(subset=['Return'])
@@ -61,12 +68,14 @@ def run(tickers, benchmark_symbol, start_date, end_date):
     returns_benchmark = compute_monthly_return(data_benchmark)
     returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
 
-    # Align by time
     returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
     returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
-    returns_benchmark.set_index('time', inplace=True)
 
-    # Generate combinations of 3-stock portfolios
+    # Ensure datetime index for downstream compatibility
+    returns_pivot_stocks.index = pd.to_datetime(returns_pivot_stocks.index)
+    returns_benchmark.set_index('time', inplace=True)
+    returns_benchmark.index = pd.to_datetime(returns_benchmark.index)
+
     portfolio_combinations = list(combinations(tickers, 3))
     portfolio_labels = ['-'.join(p) for p in portfolio_combinations]
 
