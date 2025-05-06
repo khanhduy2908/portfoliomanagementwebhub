@@ -13,7 +13,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         data_stocks, data_benchmark, benchmark_symbol,
         weights, tickers_portfolio, start_date, end_date):
 
-    # === Reconstruct index based on start_date & end_date ===
+    # Reconstruct monthly index based on date range
     full_date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
     num_rows = min(len(returns_pivot_stocks), len(full_date_range))
     date_range = full_date_range[:num_rows]
@@ -23,10 +23,20 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     returns_pivot_stocks.index = date_range
     returns_benchmark.index = date_range
 
-    # Calculate returns
+    # Filter valid tickers
+    tickers_portfolio = [t for t in tickers_portfolio if t in returns_pivot_stocks.columns]
+    if not tickers_portfolio:
+        st.warning("No valid tickers found in return data.")
+        return None, None
+
     portfolio_returns_df = returns_pivot_stocks[tickers_portfolio].copy()
     benchmark_returns_df = returns_benchmark.copy()
 
+    if portfolio_returns_df.empty or benchmark_returns_df.empty:
+        st.warning("No return data available for the selected date range.")
+        return None, None
+
+    # Calculate returns
     portfolio_returns = portfolio_returns_df @ weights
     benchmark_returns = benchmark_returns_df['Benchmark_Return']
 
