@@ -15,9 +15,10 @@ from utils import (
     block_h_complete_portfolio,
     block_h1_visualization,
     block_h2_visualization,
+    block_h3_visualization,
     block_i_performance_analysis,
-    block_e1_visualization,
-    block_e2_visualization,
+    block_i1_visualization,
+    block_i2_visualization,
     block_j_stress_testing
 )
 
@@ -124,11 +125,11 @@ if run_analysis:
             )
             st.success("Block I – Portfolio performance evaluation done.")
 
-            block_e1_visualization.run(
+            block_i1_visualization.run(
                 returns_pivot_stocks, tickers_portfolio, config.rf,
                 config.start_date, config.end_date
             )
-            block_e2_visualization.run(
+            block_i2_visualization.run(
                 data_stocks, data_benchmark, config.benchmark_symbol,
                 weights, tickers_portfolio,
                 config.start_date, config.end_date, config.rf
