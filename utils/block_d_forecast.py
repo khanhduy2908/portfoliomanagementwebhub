@@ -1,3 +1,5 @@
+# utils/block_d_forecast.py
+
 import os
 import pandas as pd
 import numpy as np
@@ -109,7 +111,6 @@ def run(data_stocks, selected_tickers, selected_combinations):
         raise ValueError("❌ No tickers with sufficient data for forecasting.")
 
     features_df = pd.concat(features_all, ignore_index=True)
-
     os.makedirs("saved_models", exist_ok=True)
 
     for combo in selected_combinations:
@@ -153,7 +154,7 @@ def run(data_stocks, selected_tickers, selected_combinations):
             'scaler': scaler,
             'base_models': base_models[-1],
             'meta_model': meta_model,
-            'features': [f"{col}_t-{t}" for t in reversed(range(lookback)) for col in feature_cols]
+            'features': [f"{col}_t-{t}" for col in feature_cols for t in reversed(range(lookback))]
         }
 
         adj_returns_combinations[combo] = adj_return_dict
