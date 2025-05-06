@@ -1,50 +1,56 @@
 import pandas as pd
 import numpy as np
+from itertools import combinations
 import warnings
-from vnstock import Vnstock
+from datetime import datetime
 
-def fetch_valid_data(symbol, start_date, end_date):
+# --- Import with fallback ---
+try:
+    from vnstock import stock_historical_data
+except ImportError:
+    from vnstock import get_price_data as stock_historical_data
+
+def fetch_data(ticker, start_date, end_date):
     try:
         df = stock_historical_data(
-            symbol=symbol,
-            start_date=start_date.strftime('%Y-%m-%d'),
-            end_date=end_date.strftime('%Y-%m-%d'),
-            resolution='1M',
+            symbol=ticker,
+            start=start_date.strftime('%Y-%m-%d'),
+            end=end_date.strftime('%Y-%m-%d'),
+            resolution='1D',
             type='stock',
             source='VCI'
         )
-        if df is None or df.empty:
-            warnings.warn(f"⚠️ {symbol}: No data returned.")
-            return None
-        df['time'] = pd.to_datetime(df['time'])
-        df['Ticker'] = symbol
-        return df
+        if df.empty or 'close' not in df.columns:
+            raise ValueError(f"No valid data for {ticker}")
+        df = df.rename(columns=str.title)
+        df['Ticker'] = ticker
+        df['time'] = pd.to_datetime(df['Time'])
+        return df[['time', 'Ticker', 'Close', 'Volume']]
     except Exception as e:
-        warnings.warn(f"⚠️ {symbol}: Failed to fetch data. Reason: {e}")
-        return None
+        warnings.warn(f"❌ Failed to fetch {ticker}: {e}")
+        return pd.DataFrame()
 
 def run(tickers, benchmark_symbol, start_date, end_date):
-    stock_data = []
+    df_all = []
     for ticker in tickers:
-        df = fetch_valid_data(ticker, start_date, end_date)
-        if df is not None:
-            stock_data.append(df)
+        df = fetch_data(ticker, start_date, end_date)
+        if not df.empty:
+            df_all.append(df)
+    data_stocks = pd.concat(df_all, ignore_index=True) if df_all else pd.DataFrame()
 
-    if not stock_data:
-        raise ValueError("❌ No valid stock data retrieved.")
+    df_benchmark = fetch_data(benchmark_symbol, start_date, end_date)
+    df_benchmark = df_benchmark.rename(columns={'Close': 'Benchmark_Close'})
 
-    data_stocks = pd.concat(stock_data).sort_values(by='time')
-    data_stocks['Return'] = data_stocks.groupby('Ticker')['Close'].pct_change() * 100
+    # Pivot for return calculation
+    pivot_stocks = data_stocks.pivot(index='time', columns='Ticker', values='Close')
+    pivot_benchmark = df_benchmark.set_index('time')[['Benchmark_Close']]
 
-    # Pivot returns for easier matrix calculation
-    returns_pivot_stocks = data_stocks.pivot(index='time', columns='Ticker', values='Return')
+    # Calculate monthly returns
+    monthly_stocks = pivot_stocks.resample('M').last().pct_change().dropna() * 100
+    monthly_benchmark = pivot_benchmark.resample('M').last().pct_change().dropna() * 100
+    monthly_benchmark.rename(columns={'Benchmark_Close': 'Benchmark_Return'}, inplace=True)
 
-    # Benchmark
-    df_benchmark = fetch_valid_data(benchmark_symbol, start_date, end_date)
-    if df_benchmark is None:
-        raise ValueError(f"❌ Failed to retrieve benchmark data: {benchmark_symbol}")
-    df_benchmark['Benchmark_Return'] = df_benchmark['Close'].pct_change() * 100
-    returns_benchmark = df_benchmark[['time', 'Benchmark_Return']].dropna()
-    returns_benchmark.set_index('time', inplace=True)
+    # Generate all 3-stock combinations
+    portfolio_combinations = list(combinations(tickers, 3))
 
-    return data_stocks, df_benchmark, returns_pivot_stocks, returns_benchmark, list(returns_pivot_stocks.columns)
+    return data_stocks, df_benchmark, monthly_stocks, monthly_benchmark, portfolio_combinations
