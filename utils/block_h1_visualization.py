@@ -5,7 +5,7 @@ def display_portfolio_info(portfolio_info, alloc_df):
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown(f"**Portfolio**: `{portfolio_info['portfolio_name']}`")
+        st.markdown(f"**Portfolio**: `{portfolio_info['Portfolio Name']}`")
         st.markdown(f"**Risk Aversion (A)**: `{portfolio_info['Risk Aversion (A)']}`")
         st.markdown(f"**y***: `{portfolio_info['y_opt']:.4f}`")
         st.markdown(f"**y_capped**: `{portfolio_info['y_capped']:.4f}`")
