@@ -1,13 +1,11 @@
-# utils/block_h2_visualization.py
-
-import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
+import streamlit as st
 
 def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers):
     st.markdown("### HRP vs Benchmark and Efficient Frontier with CAL")
 
-    # --- HRP vs Benchmark (Bar Chart) ---
+    # --- HRP vs Benchmark Bar Chart ---
     st.markdown("#### HRP Portfolios vs Benchmark")
     combos = list(hrp_result_dict.keys())[:5]
     returns = [hrp_result_dict[x]['Expected Return (%)'] for x in combos]
@@ -17,7 +15,7 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio, mu_p
     x = np.arange(len(combos))
     width = 0.25
 
-    fig1, ax1 = plt.subplots(figsize=(10, 5), facecolor='black')
+    fig1, ax1 = plt.subplots(figsize=(10, 5), facecolor='#1e1e1e')
     ax1.bar(x - width, returns, width, label='Return (%)', color='skyblue')
     ax1.bar(x, vols, width, label='Volatility (%)', color='orange')
     ax1.bar(x + width, cvars, width, label='CVaR (%)', color='salmon')
@@ -25,19 +23,20 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio, mu_p
                 label=f"Benchmark Return ({benchmark_return_mean * 100:.2f}%)")
 
     ax1.set_xticks(x)
-    ax1.set_xticklabels(combos, rotation=45)
-    ax1.set_facecolor('black')
-    ax1.set_title("HRP Portfolio Comparison", color='white')
+    ax1.set_xticklabels(combos, rotation=45, color='white')
+    ax1.set_facecolor('#1e1e1e')
+    ax1.set_title("Top HRP Portfolios vs Benchmark", color='white')
     ax1.set_ylabel("Percentage (%)", color='white')
-    ax1.tick_params(axis='x', colors='white')
     ax1.tick_params(axis='y', colors='white')
-    ax1.legend(facecolor='black', labelcolor='white')
+    ax1.legend(facecolor='#1e1e1e', labelcolor='white')
+
     st.pyplot(fig1)
 
-    # --- Efficient Frontier + CAL (Scatter Plot) ---
+    # --- Efficient Frontier + CAL ---
     st.markdown("#### Efficient Frontier and Capital Allocation Line (CAL)")
-    fig2, ax2 = plt.subplots(figsize=(10, 5), facecolor='black')
-    scatter = ax2.scatter(results_ef[1], results_ef[0], c=results_ef[2], cmap='viridis', alpha=0.6, label='Portfolios')
+
+    fig2, ax2 = plt.subplots(figsize=(10, 6), facecolor='#1e1e1e')
+    scatter = ax2.scatter(results_ef[1], results_ef[0], c=results_ef[2], cmap='viridis', alpha=0.7, label='Portfolios')
     plt.colorbar(scatter, ax=ax2, label='Sharpe Ratio')
 
     ax2.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=200,
@@ -55,18 +54,13 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio, mu_p
         sigma_uncapped = y_opt * sigma_p
         expected_uncapped = y_opt * mu_p + (1 - y_opt) * rf
         ax2.scatter(sigma_uncapped * 100, expected_uncapped * 100, c='purple', marker='D', s=150,
-                    label=f'Optimal Complete Portfolio (y={y_opt:.2f})')
+                    label=f'Uncapped Complete Portfolio (y={y_opt:.2f})')
 
-    ax2.set_facecolor('black')
-    ax2.set_title('Efficient Frontier with CAL', color='white')
-    ax2.set_xlabel('Volatility (%)', color='white')
-    ax2.set_ylabel('Expected Return (%)', color='white')
-    ax2.tick_params(axis='x', colors='white')
-    ax2.tick_params(axis='y', colors='white')
-    ax2.legend(facecolor='black', labelcolor='white')
-    ax2.grid(False)
-
-    st.markdown("#### Portfolio Tickers")
-    st.write(f"Selected tickers: {', '.join(tickers)}")
+    ax2.set_facecolor('#1e1e1e')
+    ax2.set_title("Efficient Frontier with CAL", color='white')
+    ax2.set_xlabel("Volatility (%)", color='white')
+    ax2.set_ylabel("Expected Return (%)", color='white')
+    ax2.tick_params(colors='white')
+    ax2.legend(facecolor='#1e1e1e', labelcolor='white')
 
     st.pyplot(fig2)
