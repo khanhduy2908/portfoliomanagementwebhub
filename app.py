@@ -87,7 +87,7 @@ if run_analysis:
             hrp_cvar_results = block_g_optimization.run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark)
             st.success("Block G – HRP + CVaR portfolio optimization completed.")
 
-            best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio = block_h_complete_portfolio.run(
+            best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, simulated_returns, cov, mu, y_opt = block_h_complete_portfolio.run(
                 hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
                 config.rf, config.A, config.total_capital
             )
