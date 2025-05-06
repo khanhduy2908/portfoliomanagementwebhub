@@ -4,13 +4,14 @@ import warnings
 import pandas as pd
 from vnstock import Vnstock
 from itertools import combinations
+import streamlit as st
 
 def run(tickers, benchmark_symbol, start_date, end_date):
     def get_first_trading_day(df):
         df = df.copy()
         df.index = pd.to_datetime(df.index)
         df = df.sort_index()
-        return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0]).reset_index(drop=True)
+        return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0])
 
     def get_stock_data(ticker):
         try:
@@ -18,10 +19,11 @@ def run(tickers, benchmark_symbol, start_date, end_date):
             df = stock.quote.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
 
             if df.empty:
-                raise ValueError(f"{ticker}: Empty DataFrame")
+                raise ValueError("Empty DataFrame")
 
-            if not {'time', 'close', 'volume'}.issubset(df.columns):
-                raise ValueError(f"{ticker}: Missing necessary columns in stock data.")
+            required_cols = {'time', 'close', 'volume'}
+            if not required_cols.issubset(df.columns):
+                raise ValueError(f"Missing columns: {required_cols - set(df.columns)}")
 
             df['time'] = pd.to_datetime(df['time'])
             df.set_index('time', inplace=True)
@@ -29,20 +31,23 @@ def run(tickers, benchmark_symbol, start_date, end_date):
             df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
             return df
         except Exception as e:
-            warnings.warn(f"{ticker}: Data loading failed: {e}")
+            st.warning(f"⚠️ {ticker}: failed to load - {e}")
             return pd.DataFrame()
 
     def load_all_monthly_data(tickers_list):
         stock_data = []
+        failed_tickers = []
         for ticker in tickers_list:
             df = get_stock_data(ticker)
             if df.empty:
+                failed_tickers.append(ticker)
                 continue
             df_monthly = get_first_trading_day(df)
-            df_monthly['time'] = pd.to_datetime(df_monthly.index)
-            df_monthly = df_monthly.reset_index(drop=True)
+            df_monthly['time'] = df_monthly.index
             df_monthly['Ticker'] = ticker
-            stock_data.append(df_monthly)
+            stock_data.append(df_monthly.reset_index(drop=True))
+        if failed_tickers:
+            st.warning(f"Some tickers failed to load: {', '.join(failed_tickers)}")
         return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
 
     data_stocks = load_all_monthly_data(tickers)
@@ -52,8 +57,6 @@ def run(tickers, benchmark_symbol, start_date, end_date):
         raise ValueError("No valid stock or benchmark data is available.")
 
     def compute_monthly_return(df):
-        if 'Ticker' not in df.columns or 'Close' not in df.columns or 'time' not in df.columns:
-            raise ValueError("Missing required columns in input data.")
         df = df.sort_values(['Ticker', 'time'])
         df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
         return df.dropna(subset=['Return'])
@@ -63,6 +66,8 @@ def run(tickers, benchmark_symbol, start_date, end_date):
     returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
 
     returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
+    returns_stocks = returns_stocks.sort_values('time')  # ensure time order
+
     returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
     returns_benchmark.set_index('time', inplace=True)
 
