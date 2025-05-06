@@ -1,9 +1,6 @@
-# utils/block_h_complete_portfolio.py
-
 import numpy as np
 import cvxpy as cp
 import pandas as pd
-import streamlit as st
 
 def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, total_capital,
         alpha_cvar=0.95, lambda_cvar=10, beta_l2=0.05, n_simulations=30000,
@@ -68,7 +65,7 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
     capital_rf = total_capital - capital_risky
     capital_alloc = {tickers[i]: capital_risky * w_opt[i] for i in range(len(tickers))}
 
-    # --- Return structured output ---
+    # --- Structured Output ---
     portfolio_info = {
         "portfolio_name": portfolio_name,
         "mu_p": mu_p,
@@ -82,25 +79,13 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         "utility": utility,
         "capital_rf": capital_rf,
         "capital_risky": capital_risky,
-        "capital_alloc": capital_alloc
+        "capital_alloc": capital_alloc,
     }
-
-    st.subheader("Optimal Complete Portfolio Summary")
-    st.markdown(f"**Selected Portfolio**: `{portfolio_name}`")
-    st.markdown(f"- Risk Aversion (A): `{A}`")
-    st.markdown(f"- Expected Return (E(rc)): `{expected_rc:.4f}`")
-    st.markdown(f"- Portfolio Risk (σ_c): `{sigma_c:.4f}`")
-    st.markdown(f"- Utility (U): `{utility:.4f}`")
-    st.markdown(f"- Risk-Free Capital: `{capital_rf:,.0f} VND`")
-    st.markdown(f"- Risky Capital: `{capital_risky:,.0f} VND`")
-    st.markdown("**Capital Allocation to Risky Assets:**")
 
     alloc_df = pd.DataFrame({
         "Ticker": list(capital_alloc.keys()),
         "Allocated Capital (VND)": list(capital_alloc.values())
     })
-    st.dataframe(alloc_df.style.format({"Allocated Capital (VND)": "{:,.0f}"}), use_container_width=True)
-
 
     return (
         best_portfolio,
@@ -114,5 +99,6 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         simulated_returns,
         cov,
         mu,
-        y_opt
+        y_opt,
+        alloc_df
     )
