@@ -1,3 +1,5 @@
+# utils/block_g_optimization.py
+
 import numpy as np
 import pandas as pd
 import cvxpy as cp
@@ -21,17 +23,24 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
     solvers = ['SCS', 'ECOS']
 
     for combo in valid_combinations:
+        if combo not in adj_returns_combinations or combo not in cov_matrix_dict:
+            warnings.warn(f"[{combo}] Missing combo in returns or covariance.")
+            continue
+
         tickers = combo.split('-')
-
         try:
-            mu = np.array([adj_returns_combinations[combo][t] for t in tickers]) / 100
-            cov = cov_matrix_dict[combo].loc[tickers, tickers].values
+            mu = np.array([adj_returns_combinations[combo].get(t, np.nan) for t in tickers]) / 100
+            cov_df = cov_matrix_dict[combo]
 
-            if np.any(np.linalg.eigvalsh(cov) < -1e-6):
-                warnings.warn(f"[{combo}] ❌ Covariance matrix not PSD. Skipping.")
+            if cov_df.isnull().values.any() or np.isnan(mu).any():
+                warnings.warn(f"[{combo}] NaN in mu or covariance.")
                 continue
 
-            # HRP ordering
+            cov = cov_df.loc[tickers, tickers].values
+            if np.any(np.linalg.eigvalsh(cov) < -1e-6):
+                warnings.warn(f"[{combo}] Covariance not PSD.")
+                continue
+
             corr = cov_to_corr(cov)
             dist = corr_to_dist(corr)
             Z = linkage(squareform(dist, checks=False), method='ward')
@@ -42,12 +51,10 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             cov_ord = cov[np.ix_(order, order)]
             tickers_ord = [tickers[i] for i in order]
 
-            # Simulate scenarios
             np.random.seed(42)
             scenarios = multivariate_normal.rvs(mean=mu_ord, cov=cov_ord, size=n_simulations)
             losses = -scenarios
 
-            # CVaR Optimization
             w = cp.Variable(len(tickers))
             VaR = cp.Variable()
             z = cp.Variable(n_simulations)
@@ -55,7 +62,6 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             port_loss = losses @ w
             cvar = VaR + cp.sum(z) / ((1 - alpha_cvar) * n_simulations)
             objective = cp.Maximize(mu_ord @ w - lambda_cvar * cvar - beta_l2 * cp.sum_squares(w))
-
             constraints = [
                 cp.sum(w) == 1,
                 w >= 0,
@@ -76,12 +82,12 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                     continue
 
             if not success or w.value is None:
-                warnings.warn(f"[{combo}] ❌ Optimization failed.")
+                warnings.warn(f"[{combo}] Optimization failed.")
                 continue
 
             w_opt = w.value
             if np.any(np.isnan(w_opt)) or np.abs(np.sum(w_opt) - 1) > 1e-3:
-                warnings.warn(f"[{combo}] ⚠️ Invalid weight vector.")
+                warnings.warn(f"[{combo}] Invalid weights.")
                 continue
 
             port_ret = mu_ord @ w_opt * 100
@@ -101,47 +107,23 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             })
 
         except Exception as e:
-            warnings.warn(f"[{combo}] ❌ Unexpected error: {e}")
+            warnings.warn(f"[{combo}] Unexpected error: {e}")
             continue
 
+    # --- Output Table ---
     hrp_df = pd.DataFrame(hrp_cvar_results)
-
-    # --- Fallback if no valid results ---
     if hrp_df.empty:
-        warnings.warn("⚠️ No valid HRP-CVaR portfolios found. Using fallback equal-weighted portfolio.")
-        fallback_combo = valid_combinations[0]
-        fallback_tickers = fallback_combo.split('-')
-        fallback_mu = np.array([adj_returns_combinations[fallback_combo][t] for t in fallback_tickers]) / 100
-        fallback_cov = cov_matrix_dict[fallback_combo].loc[fallback_tickers, fallback_tickers].values
-        fallback_weights = np.ones(len(fallback_tickers)) / len(fallback_tickers)
-
-        fallback_port_ret = fallback_mu @ fallback_weights * 100
-        fallback_port_vol = np.sqrt(fallback_weights.T @ fallback_cov @ fallback_weights) * 100
-        fallback_sharpe = (fallback_port_ret - benchmark_return_mean * 100) / fallback_port_vol if fallback_port_vol > 0 else 0
-
-        hrp_cvar_results.append({
-            'Portfolio': fallback_combo,
-            'Expected Return (%)': fallback_port_ret,
-            'Volatility (%)': fallback_port_vol,
-            'CVaR (%)': np.nan,
-            'Sharpe Ratio': fallback_sharpe,
-            'CVaR Exceed?': False,
-            'Weights': dict(zip(fallback_tickers, fallback_weights))
-        })
-
-        hrp_df = pd.DataFrame(hrp_cvar_results)
-        print("✅ Fallback equal-weight portfolio applied.")
-
+        print("⚠️ No valid HRP-CVaR portfolios found.")
     else:
-        hrp_df = hrp_df.sort_values(by='Sharpe Ratio', ascending=False).reset_index(drop=True)
-        print("\n📊 Top Portfolios (HRP + CVaR Soft Constraint):")
-        print(hrp_df[['Portfolio', 'Expected Return (%)', 'Volatility (%)', 'CVaR (%)', 'Sharpe Ratio', 'CVaR Exceed?']].round(2))
+        hrp_df = hrp_df.sort_values(by='Sharpe Ratio', ascending=False)
+        print("\n📊 Top Portfolios:")
+        print(hrp_df[['Portfolio', 'Expected Return (%)', 'Volatility (%)', 'CVaR (%)', 'Sharpe Ratio']].round(2))
 
-    # --- Efficient Frontier Output ---
+    # --- Efficient Frontier Data ---
     mu_list = [res['Expected Return (%)'] for res in hrp_cvar_results]
     sigma_list = [res['Volatility (%)'] for res in hrp_cvar_results]
     sharpe_list = [res['Sharpe Ratio'] for res in hrp_cvar_results]
     results_ef = (mu_list, sigma_list, sharpe_list)
+    hrp_result_dict = {res['Portfolio']: res for res in hrp_cvar_results}
 
-    hrp_result_dict = {x['Portfolio']: x for x in hrp_cvar_results}
     return hrp_result_dict, results_ef
