@@ -38,3 +38,31 @@ y_max = 0.9                 # Maximum leverage cap
 model_dir = "saved_models" # Directory where ML models are saved
 
 factor_selection_strategy = "top5_by_cluster"
+# config.py
+
+def map_risk_score_to_A(score: int) -> int:
+    """
+    Map user risk score (10–40) to a risk aversion coefficient A (integer).
+    Higher score → lower A → higher risk tolerance.
+    """
+    if score <= 17:
+        return 30  # Very risk averse
+    elif 18 <= score <= 27:
+        return 20  # Moderate risk aversion
+    elif 28 <= score <= 40:
+        return 10  # Low risk aversion
+    else:
+        raise ValueError("Risk score must be between 10 and 40")
+
+def get_risk_profile_description(score: int) -> str:
+    """
+    Provide a short description of the user's risk tolerance based on score.
+    """
+    if score <= 17:
+        return "Low risk tolerance – Prioritize capital preservation (bonds, deposits)."
+    elif 18 <= score <= 27:
+        return "Moderate risk tolerance – Balanced portfolio of stocks and bonds."
+    elif 28 <= score <= 40:
+        return "High risk tolerance – Focus on growth stocks and high-return assets."
+    else:
+        return "Invalid score"
