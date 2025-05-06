@@ -1,5 +1,3 @@
-# utils/block_b_factor.py
-
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
@@ -12,7 +10,6 @@ from itertools import combinations
 
 def compute_factors(data_stocks, returns_benchmark):
     factor_data = []
-
     for ticker in data_stocks['Ticker'].unique():
         df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
         if df.shape[0] < 6:
@@ -25,10 +22,8 @@ def compute_factors(data_stocks, returns_benchmark):
         df['Momentum'] = df['Close'].pct_change(periods=3) * 100
         df.dropna(inplace=True)
 
-        # Tính beta
         merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
                           left_on='time', right_index=True, how='inner')
-
         if len(merged) < 10:
             warnings.warn(f"{ticker}: Không đủ dữ liệu để tính beta.")
             continue
@@ -44,7 +39,6 @@ def compute_factors(data_stocks, returns_benchmark):
 
     if not factor_data:
         raise ValueError("❌ Không tính được yếu tố cho cổ phiếu nào.")
-
     return pd.concat(factor_data, ignore_index=True)
 
 def optimize_weights(latest_data):
@@ -59,7 +53,6 @@ def optimize_weights(latest_data):
         if np.sum(weights) == 0:
             return -1e9
         weights /= np.sum(weights)
-
         score = (
             weights[0] * latest_data['Return_S'] +
             weights[2] * latest_data['Liquidity_S'] +
@@ -69,14 +62,12 @@ def optimize_weights(latest_data):
         )
         latest_data['Score'] = score
         return latest_data.nlargest(5, 'Score')['Return'].mean()
-
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=50)
     return study.best_params
 
 def run(data_stocks, returns_benchmark):
     ranking_df = compute_factors(data_stocks, returns_benchmark)
-
     latest_month = ranking_df['time'].max()
     latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
 
@@ -90,7 +81,7 @@ def run(data_stocks, returns_benchmark):
     latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
 
     w_opt = optimize_weights(latest_data)
-    config.factor_weights = w_opt  # lưu trọng số vào config để tracking/debug
+    config.factor_weights = w_opt
 
     w_arr = np.array(list(w_opt.values()))
     w_arr /= w_arr.sum()
@@ -104,26 +95,38 @@ def run(data_stocks, returns_benchmark):
     )
     latest_data['Rank'] = latest_data['Score'].rank(ascending=False)
 
-    features_for_cluster = [f + '_S' for f in factor_cols]
+    strategy = getattr(config, 'factor_selection_strategy', 'top5_by_cluster')
 
-    if latest_data.shape[0] < 3:
-        raise ValueError("❌ Không thể phân cụm vì không đủ cổ phiếu.")
-
-    kmeans = KMeans(n_clusters=min(3, latest_data.shape[0]), n_init=10, random_state=42)
-    latest_data['Cluster'] = kmeans.fit_predict(latest_data[features_for_cluster])
-
-    selected_df = (
-        latest_data.sort_values('Score', ascending=False)
-        .groupby('Cluster')
-        .head(2)
-        .sort_values('Rank')
-        .head(5)
-        .reset_index(drop=True)
-    )
+    if strategy == 'top5_by_cluster':
+        features = [f + '_S' for f in factor_cols]
+        if latest_data.shape[0] < 3:
+            raise ValueError("❌ Không thể phân cụm vì không đủ cổ phiếu.")
+        kmeans = KMeans(n_clusters=min(3, latest_data.shape[0]), n_init=10, random_state=42)
+        latest_data['Cluster'] = kmeans.fit_predict(latest_data[features])
+        selected_df = (
+            latest_data.sort_values('Score', ascending=False)
+            .groupby('Cluster')
+            .head(2)
+            .sort_values('Rank')
+            .head(5)
+            .reset_index(drop=True)
+        )
+    elif strategy == 'top5_overall':
+        selected_df = latest_data.sort_values('Score', ascending=False).head(5).reset_index(drop=True)
+    elif strategy == 'strongest_clusters':
+        features = [f + '_S' for f in factor_cols]
+        if latest_data.shape[0] < 3:
+            raise ValueError("❌ Không thể phân cụm vì không đủ cổ phiếu.")
+        kmeans = KMeans(n_clusters=min(3, latest_data.shape[0]), n_init=10, random_state=42)
+        latest_data['Cluster'] = kmeans.fit_predict(latest_data[features])
+        cluster_strength = latest_data.groupby('Cluster')['Score'].mean().sort_values(ascending=False)
+        strongest_clusters = cluster_strength.head(2).index
+        selected_df = latest_data[latest_data['Cluster'].isin(strongest_clusters)]
+        selected_df = selected_df.sort_values('Score', ascending=False).head(5).reset_index(drop=True)
+    else:
+        raise ValueError(f"❌ Unknown selection strategy: {strategy}")
 
     selected_tickers = selected_df['Ticker'].tolist()
-
-    # Trả về combinations chuẩn dạng tuple
     selected_combinations = list(combinations(selected_tickers, 3))
 
     return selected_tickers, selected_combinations, latest_data, ranking_df
