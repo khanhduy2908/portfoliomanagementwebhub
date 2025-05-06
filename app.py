@@ -91,6 +91,16 @@ if run_analysis:
 
             # F
             factor_cols = ['Return_Close', 'Return_Volume', 'Spread_HL', 'Volatility_Close', 'Ticker_Encoded']
+            st.subheader("📋 DEBUG: Các cột trong features_df")
+            st.write(features_df.columns.tolist())
+
+            missing_cols = [col for col in factor_cols if col not in features_df.columns]
+            if missing_cols:
+                st.error(f"❌ Các cột sau đang thiếu trong features_df: {missing_cols}")
+                st.stop()
+            else:
+                st.success("✅ Tất cả các cột factor_cols đều có trong features_df.")
+
             walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df, factor_cols)
             st.success("Block F – Forecast model backtesting completed.")
 
