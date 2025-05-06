@@ -98,10 +98,19 @@ if run_analysis:
             )
             st.success("Block H – Complete portfolio construction finished.")
 
-            block_h1_visualization.run(capital_alloc, config.total_capital, tickers_portfolio)
-            st.success("Block H1 – Allocation pie chart displayed.")
+            # Prepare DataFrame for allocation
+            alloc_df = pd.DataFrame({
+                "Ticker": list(capital_alloc.keys()),
+                "Allocated Capital (VND)": list(capital_alloc.values())
+            })
+            block_h1_visualization.display_portfolio_info(portfolio_info, alloc_df)
+            st.success("Block H1 – Portfolio summary and capital allocation displayed.")
 
-            block_h2_visualization.run(
+
+            block_h2_visualization.run(capital_alloc, config.total_capital, tickers_portfolio)
+            st.success("Block H2 – Allocation pie chart displayed.")
+
+            block_h3_visualization.run(
                 hrp_result_dict=hrp_result_dict,
                 benchmark_return_mean=returns_benchmark['Benchmark_Return'].mean(),
                 results_ef=results_ef,
@@ -115,7 +124,7 @@ if run_analysis:
                 y_opt=y_opt,
                 tickers=tickers_portfolio
             )
-            st.success("Block H2 – Efficient Frontier and CAL displayed.")
+            st.success("Block H3 – Efficient Frontier and CAL displayed.")
 
             block_i_performance_analysis.run(
                 best_portfolio, returns_pivot_stocks, returns_benchmark,
