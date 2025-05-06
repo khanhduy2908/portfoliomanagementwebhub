@@ -13,40 +13,39 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         data_stocks, data_benchmark, benchmark_symbol,
         weights, tickers_portfolio, start_date, end_date):
 
-    # Reconstruct monthly index based on date range
+    st.write("Checking input shapes and indexes")
+    st.write("Tickers in portfolio:", tickers_portfolio)
+    st.write("Available tickers in pivot:", returns_pivot_stocks.columns.tolist())
+    st.write("Shape of pivot stocks:", returns_pivot_stocks.shape)
+    st.write("Shape of benchmark:", returns_benchmark.shape)
+
+    if not set(tickers_portfolio).intersection(set(returns_pivot_stocks.columns)):
+        st.error("No matching tickers in returns_pivot_stocks. Portfolio returns cannot be calculated.")
+        return
+
     full_date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
     num_rows = min(len(returns_pivot_stocks), len(full_date_range))
-    date_range = full_date_range[:num_rows]
+    if num_rows == 0:
+        st.error("No return data available for the selected date range.")
+        return
 
+    date_range = full_date_range[:num_rows]
     returns_pivot_stocks = returns_pivot_stocks.iloc[:num_rows].copy()
     returns_benchmark = returns_benchmark.iloc[:num_rows].copy()
     returns_pivot_stocks.index = date_range
     returns_benchmark.index = date_range
 
-    # Filter valid tickers
-    tickers_portfolio = [t for t in tickers_portfolio if t in returns_pivot_stocks.columns]
-    if not tickers_portfolio:
-        st.warning("No valid tickers found in return data.")
-        return None, None
-
     portfolio_returns_df = returns_pivot_stocks[tickers_portfolio].copy()
     benchmark_returns_df = returns_benchmark.copy()
 
-    if portfolio_returns_df.empty or benchmark_returns_df.empty:
-        st.warning("No return data available for the selected date range.")
-        return None, None
-
-    # Calculate returns
     portfolio_returns = portfolio_returns_df @ weights
     benchmark_returns = benchmark_returns_df['Benchmark_Return']
 
-    # Cumulative returns
     cumulative_returns = (1 + portfolio_returns / 100).cumprod()
     benchmark_cumulative = (1 + benchmark_returns / 100).cumprod()
     cumulative_returns /= cumulative_returns.iloc[0]
     benchmark_cumulative /= benchmark_cumulative.iloc[0]
 
-    # Metrics
     mean_return = portfolio_returns.mean()
     volatility = portfolio_returns.std()
     sharpe_ratio = (mean_return - rf * 100) / volatility if volatility > 0 else np.nan
@@ -59,10 +58,8 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     cagr = cumulative_returns.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
     calmar_ratio = cagr / abs(max_drawdown) if max_drawdown != 0 else np.nan
 
-    # Rolling Sharpe
     rolling_sharpe = (portfolio_returns - rf * 100).rolling(12).mean() / portfolio_returns.rolling(12).std()
 
-    # Alpha/Beta
     aligned_df = pd.concat([portfolio_returns, benchmark_returns], axis=1).dropna()
     aligned_df.columns = ['Portfolio', 'Benchmark']
     if len(aligned_df) >= 2:
@@ -77,7 +74,6 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     else:
         alpha = beta = r_squared = tracking_error = info_ratio = np.nan
 
-    # Summary tables
     benchmark_cagr = benchmark_cumulative.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
     summary_df = pd.DataFrame({
         'Metric': ['Mean Return', 'Volatility', 'Sharpe Ratio', 'Sortino Ratio',
@@ -100,7 +96,6 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         'Value': [alpha, beta, r_squared, tracking_error, info_ratio]
     })
 
-    # Layout: Row 1
     st.subheader("Cumulative Returns")
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     ax1.plot(cumulative_returns.index, cumulative_returns, label='Portfolio', color='cyan')
@@ -112,9 +107,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     ax1.grid(True, alpha=0.3)
     st.pyplot(fig1)
 
-    # Layout: Row 2 with 2 charts side-by-side
     col1, col2 = st.columns(2)
-
     with col1:
         st.subheader("Drawdown")
         fig2, ax2 = plt.subplots(figsize=(6, 3))
@@ -133,7 +126,6 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         ax3.grid(True, alpha=0.3)
         st.pyplot(fig3)
 
-    # Final tables
     st.subheader("Performance Summary")
     st.dataframe(summary_df.round(4), use_container_width=True)
 
