@@ -17,7 +17,7 @@ def corr_to_dist(corr):
 
 def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark,
         alpha_cvar=0.95, lambda_cvar=5, beta_l2=0.01, cvar_soft_limit=6.5, n_simulations=20000):
-    
+
     benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
     hrp_cvar_results = []
     solvers = ['SCS', 'ECOS']
@@ -115,4 +115,10 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
     else:
         print("⚠️ No valid portfolios found.")
 
-    return hrp_cvar_results
+    # --- Efficient Frontier Data for Visualization ---
+    mu_list = [res['Expected Return (%)'] for res in hrp_cvar_results]
+    sigma_list = [res['Volatility (%)'] for res in hrp_cvar_results]
+    sharpe_list = [res['Sharpe Ratio'] for res in hrp_cvar_results]
+    results_ef = (mu_list, sigma_list, sharpe_list)
+
+    return hrp_cvar_results, results_ef
