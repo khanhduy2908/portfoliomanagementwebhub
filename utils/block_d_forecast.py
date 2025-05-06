@@ -4,10 +4,10 @@ import os
 import pandas as pd
 import numpy as np
 import warnings
-import optuna
+import joblib
+import hashlib
 import lightgbm as lgb
 import xgboost as xgb
-import matplotlib.pyplot as plt
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import KFold
@@ -15,8 +15,6 @@ from sklearn.preprocessing import StandardScaler
 from pytorch_tabnet.tab_model import TabNetRegressor
 from pytorch_tabnet.callbacks import EarlyStopping
 import torch
-import joblib
-import hashlib
 
 warnings.filterwarnings("ignore")
 
@@ -42,9 +40,9 @@ def construct_dataset(df_combo, subset):
         df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
         for i in range(lookback, len(df_ticker)):
             row_window = []
-            for t in reversed(range(lookback)):
+            for lag in reversed(range(lookback)):
                 for col in feature_cols:
-                    row_window.append(df_ticker[col].iloc[i - t])
+                    row_window.append(df_ticker[col].iloc[i - lag])
             X.append(row_window)
             y.append(df_ticker['Return_Close'].iloc[i])
     return np.array(X), np.array(y)
@@ -68,8 +66,8 @@ def train_stacked_model(X, y, n_folds=5):
 
         model_tab = TabNetRegressor(seed=42)
         model_tab.fit(
-            X_train, y_train.reshape(-1,1),
-            eval_set=[(X_valid, y_valid.reshape(-1,1))],
+            X_train, y_train.reshape(-1, 1),
+            eval_set=[(X_valid, y_valid.reshape(-1, 1))],
             eval_metric=['mae'],
             patience=10,
             max_epochs=100,
@@ -82,7 +80,6 @@ def train_stacked_model(X, y, n_folds=5):
             )]
         )
         oof_preds_tab.append(model_tab.predict(X_valid).squeeze())
-
         base_models.append((model_lgb, model_xgb, model_tab))
 
     X_meta = np.column_stack((np.concatenate(oof_preds_lgb),
@@ -155,7 +152,7 @@ def run(data_stocks, selected_tickers, selected_combinations):
             'scaler': scaler,
             'base_models': base_models[-1],
             'meta_model': meta_model,
-            'features': [f"{col}_t-{t}" for t in reversed(range(lookback)) for col in feature_cols]
+            'features': [f"{col}_t-{lag}" for lag in reversed(range(lookback)) for col in feature_cols]
         }
 
         adj_returns_combinations[combo] = adj_return_dict
