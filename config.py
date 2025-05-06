@@ -1,23 +1,40 @@
-# --- Global Config for Portfolio Optimization System ---
+# config.py
 
-# User-selected stock tickers
-tickers = []
+# === User Inputs from Streamlit Sidebar ===
+tickers = []                # List of stock tickers selected by user
+benchmark_symbol = None     # Benchmark index symbol
 
-# Benchmark ticker (e.g., VNINDEX)
-benchmark_symbol = None
+start_date = None           # Analysis start date (datetime)
+end_date = None             # Analysis end date (datetime)
 
-# Time range
-start_date = None
-end_date = None
+rf_annual = 0.09            # Annual risk-free rate (default 9%)
+rf = 0.0075                 # Monthly risk-free rate
 
-# Risk-free rate
-rf_annual = 9.0  # Annual risk-free rate in %
-rf = rf_annual / 12 / 100  # Monthly risk-free rate in decimal
+total_capital = 750_000_000  # Capital in VND
+A = 15                      # Risk aversion coefficient
 
-# Investment capital (in VND)
-total_capital = 750_000_000
+# === Block B – Factor Selection ===
+factor_weights = {}         # Optimal weights for ranking factors
 
-# Risk aversion coefficient (A)
-A = 15
+# === Block C – Covariance Estimation ===
+weight_garch = 0.6          # GARCH vs Ledoit-Wolf blend ratio (0.0 – 1.0)
+
+# === Block D – Return Forecasting ===
+lookback = 12               # Number of periods (months) for feature window
+min_samples = 100           # Minimum number of samples per portfolio for training
+
+# === Block G – HRP + CVaR Optimization ===
+alpha_cvar = 0.95           # Confidence level for CVaR
+lambda_cvar = 5             # Penalization weight for CVaR
+beta_l2 = 0.01              # L2 regularization term
+cvar_soft_limit = 6.5       # Soft cap for CVaR (%)
+n_simulations = 20000       # Monte Carlo scenarios
+
+# === Block H – Complete Portfolio Construction ===
+y_min = 0.6                 # Minimum leverage cap
+y_max = 0.9                 # Maximum leverage cap
+
+# === Directories for Model Persistence ===
+model_dir = "saved_models" # Directory where ML models are saved
 
 factor_selection_strategy = "top5_by_cluster"
