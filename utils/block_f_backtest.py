@@ -1,5 +1,3 @@
-# utils/block_f_backtest.py
-
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -15,12 +13,11 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
     walkforward_results = []
 
     for combo in valid_combinations:
-        subset = combo.split('-')
-        df_combo = features_df[features_df['Ticker'].isin(subset)].copy()
+        tickers = list(combo)
+        df_combo = features_df[features_df['Ticker'].isin(tickers)].copy()
 
-        # Tạo dataset dạng chuỗi thời gian
         X_all, y_all, meta = [], [], []
-        for ticker in subset:
+        for ticker in tickers:
             df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
             for i in range(lookback, len(df_ticker)):
                 window = df_ticker[factor_cols].iloc[i - lookback:i].values.flatten()
@@ -71,7 +68,6 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
             preds = model.predict(X_test).squeeze()
             y_true = y_test.squeeze()
 
-            # Metrics
             mae = mean_absolute_error(y_true, preds)
             r2 = r2_score(y_true, preds)
             acc = (np.sign(y_true) == np.sign(preds)).mean()
@@ -86,16 +82,17 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
             y_all_vals.extend(y_true)
             tickers_all.extend(test_meta['ticker'].values)
 
-            # Lưu model từng fold
+            # Save model
             os.makedirs("saved_models", exist_ok=True)
-            joblib.dump(model, f"saved_models/model_{combo}_fold{i}.pkl")
+            fname = "_".join(combo)
+            joblib.dump(model, f"saved_models/model_{fname}_fold{i}.pkl")
 
         if not maes:
             print(f"⚠️ {combo}: No valid folds. Skipping.")
             continue
 
         walkforward_results.append({
-            'Portfolio': combo,
+            'Portfolio': "-".join(combo),
             'MAE': np.mean(maes),
             'R2': np.mean(r2s),
             'Accuracy': np.mean(accs),
@@ -118,7 +115,7 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
 
         best_combo = walkforward_df.iloc[0]['Portfolio']
         print(f"\n📋 Stock-level Errors for Best Portfolio ({best_combo}):")
-        print(error_by_stock[best_combo].round(4))
+        print(error_by_stock[tuple(best_combo.split("-"))].round(4))
     else:
         walkforward_df = pd.DataFrame()
         print("⚠️ No valid portfolios evaluated in Block F.")
