@@ -91,16 +91,32 @@ def train_stacked_model(X, y, n_folds=5):
 
 def run(data_stocks, selected_tickers, selected_combinations):
     features_all = []
+    valid_tickers = []
+
     for i, ticker in enumerate(selected_tickers):
         df = data_stocks[data_stocks['Ticker'] == ticker].copy()
+        print(f"🔍 Ticker {ticker} - Raw rows: {df.shape[0]}")
         df_feat = engineer_features(df, ticker_id=i)
+
+        if df_feat.empty or df_feat.shape[0] < lookback + 5:
+            print(f"⚠️ Ticker {ticker} bị loại do không đủ dữ liệu sau feature engineering.")
+            continue
+
         df_feat['Ticker'] = ticker
         features_all.append(df_feat)
+        valid_tickers.append(ticker)
+
+    if not features_all:
+        raise ValueError("❌ Không có cổ phiếu nào đủ dữ liệu để tạo đặc trưng.")
 
     features_df = pd.concat(features_all, ignore_index=True)
 
     for combo in selected_combinations:
         subset = combo.split('-')
+        if not all(t in valid_tickers for t in subset):
+            print(f"⚠️ Bỏ qua {combo} vì chứa mã không hợp lệ.")
+            continue
+
         df_combo = features_df[features_df['Ticker'].isin(subset)].copy()
         X_raw, y = construct_dataset(df_combo, subset)
 
