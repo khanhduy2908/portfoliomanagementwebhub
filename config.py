@@ -19,3 +19,5 @@ total_capital = 750_000_000
 
 # Risk aversion coefficient (A)
 A = 15
+
+factor_selection_strategy = "top5_by_cluster"
