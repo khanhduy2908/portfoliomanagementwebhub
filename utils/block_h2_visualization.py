@@ -2,15 +2,14 @@ import matplotlib.pyplot as plt
 import streamlit as st
 
 def run(capital_alloc, capital_rf, tickers):
-    # Chuẩn bị dữ liệu
     labels = ['Risk-Free Asset'] + tickers
     sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
 
     if any(s < 0 for s in sizes):
-        st.warning("Cannot plot pie chart due to negative allocations.")
+        st.warning("⚠️ Cannot display pie chart due to negative capital allocation.")
         return
 
-    # Tạo biểu đồ với style dark nhẹ
+    # Create pie chart with dark mode style
     fig, ax = plt.subplots(figsize=(7, 6), facecolor='#1e1e1e')
     colors = plt.cm.Pastel1.colors[:len(labels)]
 
@@ -23,7 +22,6 @@ def run(capital_alloc, capital_rf, tickers):
         textprops={'color': 'white', 'fontsize': 10}
     )
 
-    # Căn giữa và định dạng
     for text in texts:
         text.set_color('white')
     for autotext in autotexts:
