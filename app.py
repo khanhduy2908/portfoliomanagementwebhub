@@ -117,6 +117,27 @@ if run_analysis:
             block_h2_visualization.run(capital_alloc, config.total_capital, tickers_portfolio)
             st.success("Block H2 – Allocation pie chart displayed.")
 
+            # --- Ensure benchmark_return_mean is computed with datetime index ---
+            if isinstance(returns_benchmark.index, pd.PeriodIndex):
+                returns_benchmark.index = returns_benchmark.index.to_timestamp()
+
+            benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
+
+            block_h3_visualization.run(
+                hrp_result_dict=hrp_result_dict,
+                benchmark_return_mean=benchmark_return_mean,
+                results_ef=results_ef,
+                best_portfolio=best_portfolio,
+                mu_p=mu.mean(),
+                sigma_p=np.std(simulated_returns @ weights),
+                rf=config.rf,
+                sigma_c=sigma_c,
+                expected_rc=expected_rc,
+                y_capped=y_capped,
+                y_opt=y_opt,
+                tickers=tickers_portfolio
+            )
+
             block_h3_visualization.run(
                 hrp_result_dict=hrp_result_dict,
                 benchmark_return_mean=returns_benchmark['Benchmark_Return'].mean(),
