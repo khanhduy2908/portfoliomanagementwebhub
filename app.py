@@ -98,7 +98,7 @@ if run_analysis:
 
             block_h1_visualization.run(capital_alloc, config.total_capital)
             block_h2_visualization.run(hrp_cvar_results, returns_benchmark, adj_returns_combinations,
-                                       cov_matrix_dict, best_portfolio, weights, tickers_portfolio,
+                                       cov_matrix_dict, best_portfolio, weights, tickers_portfolio,tickers_portfolio,
                                        config.rf, sigma_c, expected_rc)
 
             block_i_performance_analysis.run(
