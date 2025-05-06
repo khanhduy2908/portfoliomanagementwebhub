@@ -36,13 +36,13 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
     portfolio_info = {
-        'portfolio_name': portfolio_name,
+        'Portfolio Name': '-'.join(portfolio_name) if isinstance(portfolio_name, tuple) else portfolio_name,
         'mu': mu_p,
         'sigma': sigma_p,
         'rf': rf,
         'y_opt': y_opt,
         'y_capped': y_capped,
-        'A': A,
+        'Risk Aversion (A)': A,
         'expected_rc': expected_rc,
         'sigma_c': sigma_c,
         'utility': utility,
