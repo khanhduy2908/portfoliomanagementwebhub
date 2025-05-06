@@ -11,10 +11,11 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         raise ValueError("No valid HRP-CVaR results from Block G.")
 
     # --- Select best portfolio by Sharpe Ratio ---
-    best_portfolio = max(hrp_cvar_results, key=lambda x: x['Sharpe Ratio'])
+    best_key = max(hrp_cvar_results, key=lambda k: hrp_cvar_results[k]['Sharpe Ratio'])
+    best_portfolio = hrp_cvar_results[best_key]
     tickers = list(best_portfolio['Weights'].keys())
     weights_hrp = np.array(list(best_portfolio['Weights'].values()))
-    portfolio_name = best_portfolio['Portfolio']
+    portfolio_name = best_key
 
     mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
     cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
