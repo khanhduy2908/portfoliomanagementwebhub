@@ -1,55 +1,77 @@
-import pandas as pd
-import numpy as np
+# utils/block_a_data.py
+
 import warnings
-
-# Fallback for vnstock import
-try:
-    from vnstock import stock_historical_data
-except ImportError:
-    from vnstock import get_price_data as stock_historical_data
-
-def fetch_valid_data(symbol, start_date, end_date):
-    try:
-        df = stock_historical_data(
-            symbol=symbol,
-            start_date=start_date.strftime('%Y-%m-%d'),
-            end_date=end_date.strftime('%Y-%m-%d'),
-            resolution='1M',
-            type='stock',
-            source='VCI'
-        )
-        if df is None or df.empty:
-            warnings.warn(f"⚠️ {symbol}: No data returned.")
-            return None
-        df['time'] = pd.to_datetime(df['time'])
-        df['Ticker'] = symbol
-        return df
-    except Exception as e:
-        warnings.warn(f"⚠️ {symbol}: Failed to fetch data. Reason: {e}")
-        return None
+import pandas as pd
+from vnstock import Vnstock
+from itertools import combinations
+import streamlit as st
 
 def run(tickers, benchmark_symbol, start_date, end_date):
-    stock_data = []
-    for ticker in tickers:
-        df = fetch_valid_data(ticker, start_date, end_date)
-        if df is not None:
-            stock_data.append(df)
+    def get_first_trading_day(df):
+        df = df.copy()
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        return df.groupby(df.index.to_period('M')).apply(lambda x: x.iloc[0])
 
-    if not stock_data:
-        raise ValueError("❌ No valid stock data retrieved.")
+    def get_stock_data(ticker):
+        try:
+            stock = Vnstock().stock(symbol=ticker, source='VCI')
+            df = stock.quote.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
 
-    data_stocks = pd.concat(stock_data).sort_values(by='time')
-    data_stocks['Return'] = data_stocks.groupby('Ticker')['Close'].pct_change() * 100
+            if df.empty:
+                raise ValueError("Empty DataFrame")
 
-    # Pivot returns for easier matrix calculation
-    returns_pivot_stocks = data_stocks.pivot(index='time', columns='Ticker', values='Return')
+            required_cols = {'time', 'close', 'volume'}
+            if not required_cols.issubset(df.columns):
+                raise ValueError(f"Missing columns: {required_cols - set(df.columns)}")
 
-    # Benchmark
-    df_benchmark = fetch_valid_data(benchmark_symbol, start_date, end_date)
-    if df_benchmark is None:
-        raise ValueError(f"❌ Failed to retrieve benchmark data: {benchmark_symbol}")
-    df_benchmark['Benchmark_Return'] = df_benchmark['Close'].pct_change() * 100
-    returns_benchmark = df_benchmark[['time', 'Benchmark_Return']].dropna()
+            df['time'] = pd.to_datetime(df['time'])
+            df.set_index('time', inplace=True)
+            df = df[['open', 'high', 'low', 'close', 'volume']]
+            df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+            return df
+        except Exception as e:
+            st.warning(f"⚠️ {ticker}: failed to load - {e}")
+            return pd.DataFrame()
+
+    def load_all_monthly_data(tickers_list):
+        stock_data = []
+        failed_tickers = []
+        for ticker in tickers_list:
+            df = get_stock_data(ticker)
+            if df.empty:
+                failed_tickers.append(ticker)
+                continue
+            df_monthly = get_first_trading_day(df)
+            df_monthly['time'] = df_monthly.index
+            df_monthly['Ticker'] = ticker
+            stock_data.append(df_monthly.reset_index(drop=True))
+        if failed_tickers:
+            st.warning(f"Some tickers failed to load: {', '.join(failed_tickers)}")
+        return pd.concat(stock_data, ignore_index=True) if stock_data else pd.DataFrame()
+
+    data_stocks = load_all_monthly_data(tickers)
+    data_benchmark = load_all_monthly_data([benchmark_symbol])
+
+    if data_stocks.empty or data_benchmark.empty:
+        raise ValueError("No valid stock or benchmark data is available.")
+
+    def compute_monthly_return(df):
+        df = df.sort_values(['Ticker', 'time'])
+        df['Return'] = df.groupby('Ticker')['Close'].pct_change() * 100
+        return df.dropna(subset=['Return'])
+
+    returns_stocks = compute_monthly_return(data_stocks)
+    returns_benchmark = compute_monthly_return(data_benchmark)
+    returns_benchmark = returns_benchmark[['time', 'Return']].rename(columns={'Return': 'Benchmark_Return'})
+
+    returns_stocks = returns_stocks.merge(returns_benchmark, on='time', how='inner')
+    returns_stocks = returns_stocks.sort_values('time')  # ensure time order
+
+    returns_pivot_stocks = returns_stocks.pivot(index='time', columns='Ticker', values='Return')
     returns_benchmark.set_index('time', inplace=True)
 
-    return data_stocks, df_benchmark, returns_pivot_stocks, returns_benchmark, list(returns_pivot_stocks.columns)
+    portfolio_combinations = list(combinations(tickers, 3))
+    portfolio_labels = ['-'.join(p) for p in portfolio_combinations]
+
+    return data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_labels
