@@ -1,5 +1,3 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -60,7 +58,7 @@ config.A = A_user
 
 # --- Input validation ---
 if not config.tickers or config.benchmark_symbol is None:
-    st.error("Please select at least one stock ticker and one benchmark.")
+    st.error("❌ Please select at least one stock ticker and one benchmark.")
     st.stop()
 
 # --- Main Execution Pipeline ---
@@ -88,22 +86,22 @@ if run_analysis:
             walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df, factor_cols)
             st.success("Block F – Forecast model backtesting completed.")
 
-            hrp_cvar_results, results_ef = block_g_optimization.run(
+            hrp_result_dict, results_ef = block_g_optimization.run(
                 valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark
             )
             st.success("Block G – HRP + CVaR portfolio optimization completed.")
 
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, simulated_returns, cov, mu, y_opt = block_h_complete_portfolio.run(
-                hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
+                hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
                 config.rf, config.A, config.total_capital
             )
             st.success("Block H – Complete portfolio construction finished.")
 
-            block_h1_visualization.run(capital_alloc, portfolio_info['capital_rf'], tickers_portfolio)
-            st.success("Block H1 – Capital allocation visualization finished.")
+            block_h1_visualization.run(capital_alloc, config.total_capital, tickers_portfolio)
+            st.success("Block H1 – Allocation pie chart displayed.")
 
             block_h2_visualization.run(
-                hrp_result_dict=hrp_cvar_results,
+                hrp_result_dict=hrp_result_dict,
                 benchmark_return_mean=returns_benchmark['Benchmark_Return'].mean(),
                 results_ef=results_ef,
                 best_portfolio=best_portfolio,
@@ -116,7 +114,7 @@ if run_analysis:
                 y_opt=y_opt,
                 tickers=tickers_portfolio
             )
-            st.success("Block H2 – Efficient frontier visualization finished.")
+            st.success("Block H2 – Efficient Frontier and CAL displayed.")
 
             block_i_performance_analysis.run(
                 best_portfolio, returns_pivot_stocks, returns_benchmark,
@@ -141,7 +139,7 @@ if run_analysis:
             )
             st.success("Block J – Multi-layer portfolio stress testing completed.")
 
-            st.success("Portfolio optimization pipeline completed successfully.")
+            st.success("✅ Portfolio optimization pipeline completed successfully.")
 
         except Exception as e:
-            st.error(f"Pipeline execution failed: {str(e)}")
+            st.error(f"❌ Pipeline execution failed: {str(e)}")
