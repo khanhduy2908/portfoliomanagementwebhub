@@ -33,17 +33,22 @@ st.title("Institutional Portfolio Optimization Platform")
 # --- Sidebar Inputs ---
 st.sidebar.header("User Configuration")
 
+# Ticker selection
 default_tickers = [x for x in ["VNM", "FPT", "MWG", "REE", "VCB"] if x in valid_tickers]
 tickers_user = st.sidebar.multiselect("Select stock tickers", options=valid_tickers, default=default_tickers)
 
+# Benchmark selection
 default_benchmark = "VNINDEX" if "VNINDEX" in valid_tickers else valid_tickers[0]
 benchmark_user = st.sidebar.selectbox("Select benchmark index", options=valid_tickers, index=valid_tickers.index(default_benchmark))
 
+# Date range and risk-free rate
 start_user = st.sidebar.date_input("Start date", value=datetime.date(2020, 1, 1))
 end_user = st.sidebar.date_input("End date", value=datetime.date.today())
 rf_user = st.sidebar.number_input("Annual risk-free rate (%)", value=9.0) / 100
 capital_user = st.sidebar.number_input("Total capital (VND)", value=750_000_000)
 A_user = st.sidebar.slider("Risk aversion coefficient (A)", min_value=10, max_value=40, value=15)
+
+# Strategy selection
 strategy_options = {
     "Top 2 from each cluster": "top5_by_cluster",
     "Top 5 overall": "top5_overall",
@@ -51,7 +56,8 @@ strategy_options = {
 }
 selection_strategy = st.sidebar.selectbox("Factor selection strategy", list(strategy_options.keys()))
 
-run_analysis = st.sidebar.button("🚀 Run Portfolio Optimization")
+# Run button
+run_analysis = st.sidebar.button("\U0001F680 Run Portfolio Optimization")
 
 # --- Assign config values ---
 config.tickers = tickers_user
@@ -73,56 +79,59 @@ if not config.tickers or config.benchmark_symbol is None:
 if run_analysis:
     with st.spinner("Running portfolio optimization pipeline..."):
         try:
+            # A
             data_stocks, data_benchmark, returns_pivot_stocks, returns_benchmark, portfolio_combinations = block_a_data.run(
                 config.tickers, config.benchmark_symbol, config.start_date, config.end_date
             )
             st.success("Block A – Data loaded and monthly returns calculated.")
 
+            # B
             selected_tickers, selected_combinations, latest_data, ranking_df = block_b_factor.run(data_stocks, returns_benchmark)
             st.success("Block B – Stock ranking using factor analysis completed.")
 
+            # C
             cov_matrix_dict = block_c_covariance.run(selected_combinations, returns_pivot_stocks)
             st.success("Block C – Covariance matrix estimation completed.")
 
+            # D
             adj_returns_combinations, model_store, features_df = block_d_forecast.run(data_stocks, selected_tickers, selected_combinations)
             st.success("Block D – Return forecasting with ML ensemble completed.")
 
+            # E
             valid_combinations = block_e_feasibility.run(adj_returns_combinations, cov_matrix_dict)
             st.success("Block E – Feasible portfolio combinations selected.")
 
+            # F
             factor_cols = ['Return_Close', 'Return_Volume', 'Spread_HL', 'Volatility_Close', 'Ticker_Encoded']
             walkforward_df, error_by_stock = block_f_backtest.run(valid_combinations, features_df, factor_cols)
             st.success("Block F – Forecast model backtesting completed.")
 
+            # G
             hrp_result_dict, results_ef = block_g_optimization.run(
                 valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark
             )
             st.success("Block G – HRP + CVaR portfolio optimization completed.")
 
+            # H
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, simulated_returns, cov, mu, y_opt = block_h_complete_portfolio.run(
                 hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
                 config.rf, config.A, config.total_capital
             )
             st.success("Block H – Complete portfolio construction finished.")
 
-            # Prepare DataFrame for allocation
-            alloc_df = pd.DataFrame({
-                "Ticker": list(capital_alloc.keys()),
-                "Allocated Capital (VND)": list(capital_alloc.values())
-            })
+            # H1
+            alloc_df = pd.DataFrame({"Ticker": list(capital_alloc.keys()), "Allocated Capital (VND)": list(capital_alloc.values())})
             block_h1_visualization.display_portfolio_info(portfolio_info, alloc_df)
             st.success("Block H1 – Portfolio summary and capital allocation displayed.")
 
-
+            # H2
             block_h2_visualization.run(capital_alloc, config.total_capital, tickers_portfolio)
             st.success("Block H2 – Allocation pie chart displayed.")
 
-            # --- Ensure benchmark_return_mean is computed with datetime index ---
+            # H3 (only once, and timestamp corrected)
             if isinstance(returns_benchmark.index, pd.PeriodIndex):
                 returns_benchmark.index = returns_benchmark.index.to_timestamp()
-
             benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
-
             block_h3_visualization.run(
                 hrp_result_dict=hrp_result_dict,
                 benchmark_return_mean=benchmark_return_mean,
@@ -137,23 +146,9 @@ if run_analysis:
                 y_opt=y_opt,
                 tickers=tickers_portfolio
             )
-
-            block_h3_visualization.run(
-                hrp_result_dict=hrp_result_dict,
-                benchmark_return_mean=returns_benchmark['Benchmark_Return'].mean(),
-                results_ef=results_ef,
-                best_portfolio=best_portfolio,
-                mu_p=mu.mean(),
-                sigma_p=np.std(simulated_returns @ weights),
-                rf=config.rf,
-                sigma_c=sigma_c,
-                expected_rc=expected_rc,
-                y_capped=y_capped,
-                y_opt=y_opt,
-                tickers=tickers_portfolio
-            )
             st.success("Block H3 – Efficient Frontier and CAL displayed.")
 
+            # I
             block_i_performance_analysis.run(
                 best_portfolio, returns_pivot_stocks, returns_benchmark,
                 config.rf, config.A, config.total_capital,
@@ -162,22 +157,15 @@ if run_analysis:
             )
             st.success("Block I – Portfolio performance evaluation done.")
 
-            block_i1_visualization.run(
-                returns_pivot_stocks, tickers_portfolio, config.rf,
-                config.start_date, config.end_date
-            )
-            block_i2_visualization.run(
-                data_stocks, data_benchmark, config.benchmark_symbol,
-                weights, tickers_portfolio,
-                config.start_date, config.end_date, config.rf
-            )
+            # I1 & I2
+            block_i1_visualization.run(returns_pivot_stocks, tickers_portfolio, config.rf, config.start_date, config.end_date)
+            block_i2_visualization.run(data_stocks, data_benchmark, config.benchmark_symbol, weights, tickers_portfolio, config.start_date, config.end_date, config.rf)
 
-            block_j_stress_testing.run(
-                best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
-            )
+            # J
+            block_j_stress_testing.run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf)
             st.success("Block J – Multi-layer portfolio stress testing completed.")
 
-            st.success("✅ Portfolio optimization pipeline completed successfully.")
+            st.success("\u2705 Portfolio optimization pipeline completed successfully.")
 
         except Exception as e:
-            st.error(f"❌ Pipeline execution failed: {str(e)}")
+            st.error(f"\u274C Pipeline execution failed: {str(e)}")
