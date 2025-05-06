@@ -60,7 +60,7 @@ config.A = A_user
 
 # --- Input validation ---
 if not config.tickers or config.benchmark_symbol is None:
-    st.error("❌ Please select at least one stock ticker and one benchmark.")
+    st.error("Please select at least one stock ticker and one benchmark.")
     st.stop()
 
 # --- Main Execution Pipeline ---
@@ -99,8 +99,8 @@ if run_analysis:
             )
             st.success("Block H – Complete portfolio construction finished.")
 
-            block_h1_visualization.run(capital_alloc, config.total_capital)
-            st.success("Block H1 – Complete portfolio construction finished.")
+            block_h1_visualization.run(capital_alloc, portfolio_info['capital_rf'], tickers_portfolio)
+            st.success("Block H1 – Capital allocation visualization finished.")
 
             block_h2_visualization.run(
                 hrp_result_dict=hrp_cvar_results,
@@ -116,8 +116,8 @@ if run_analysis:
                 y_opt=y_opt,
                 tickers=tickers_portfolio
             )
-            st.success("Block H2 – Complete portfolio construction finished.")
-            
+            st.success("Block H2 – Efficient frontier visualization finished.")
+
             block_i_performance_analysis.run(
                 best_portfolio, returns_pivot_stocks, returns_benchmark,
                 config.rf, config.A, config.total_capital,
