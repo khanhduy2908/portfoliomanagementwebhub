@@ -13,6 +13,8 @@ from utils import (
     block_f_backtest,
     block_g_optimization,
     block_h_complete_portfolio,
+    block_h1_visualization,
+    block_h2_visualization,
     block_i_performance_analysis,
     block_e1_visualization,
     block_e2_visualization,
