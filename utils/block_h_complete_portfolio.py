@@ -1,3 +1,5 @@
+# utils/block_h_complete_portfolio.py
+
 import numpy as np
 import cvxpy as cp
 import pandas as pd
@@ -7,21 +9,16 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
         alpha_cvar=0.95, lambda_cvar=10, beta_l2=0.05, n_simulations=30000,
         y_min=0.6, y_max=0.9):
 
-    # --- Defensive check for result availability ---
-    if not hrp_cvar_results or not isinstance(hrp_cvar_results, dict):
-        raise ValueError("Block G did not return any valid portfolio dictionary.")
-
-    hrp_portfolio_list = list(hrp_cvar_results.values())
-    hrp_portfolio_list = [p for p in hrp_portfolio_list if 'Sharpe Ratio' in p and not np.isnan(p['Sharpe Ratio'])]
-
-    if not hrp_portfolio_list:
-        raise ValueError("All portfolios have invalid or missing Sharpe Ratio.")
+    if not hrp_cvar_results:
+        st.error("❌ No valid HRP-CVaR results from Block G. Please check earlier blocks for data/model issues.")
+        return None, None, None, None, None, None, None, None, None, None, None, None
 
     # --- Select best portfolio by Sharpe Ratio ---
-    best_portfolio = max(hrp_portfolio_list, key=lambda p: p['Sharpe Ratio'])
-    portfolio_name = best_portfolio['Portfolio']
+    best_key = max(hrp_cvar_results, key=lambda k: hrp_cvar_results[k]['Sharpe Ratio'])
+    best_portfolio = hrp_cvar_results[best_key]
     tickers = list(best_portfolio['Weights'].keys())
     weights_hrp = np.array(list(best_portfolio['Weights'].values()))
+    portfolio_name = best_key
 
     mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
     cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
@@ -52,7 +49,8 @@ def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, tota
     problem.solve(solver='SCS')
 
     if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
-        raise ValueError("Complete portfolio optimization failed.")
+        st.error("❌ Complete portfolio optimization failed. Please review return and risk inputs.")
+        return None, None, None, None, None, None, None, None, None, None, None, None
 
     # --- Results ---
     w_opt = w.value
