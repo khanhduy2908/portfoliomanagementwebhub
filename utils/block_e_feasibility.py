@@ -7,31 +7,25 @@ def run(adj_returns_combinations, cov_matrix_dict):
     valid_combinations = []
     invalid_log = []
 
-    target_combinations = list(adj_returns_combinations.keys())
-
-    for combo in target_combinations:
-        # Ensure combo is a string
-        if isinstance(combo, tuple):
-            combo = '-'.join(combo)
-
-        tickers = combo.split('-')
+    for combo in adj_returns_combinations.keys():
+        tickers = list(combo)  # combo là tuple
 
         # 1. Expected return vector
         try:
-            mu = np.array([adj_returns_combinations[combo][t] for t in tickers]) / 100  # decimal format
+            mu = np.array([adj_returns_combinations[combo][t] for t in tickers]) / 100
         except KeyError:
             invalid_log.append((combo, "❌ Missing expected return"))
             continue
 
         # 2. Covariance matrix
         try:
-            cov_df = cov_matrix_dict[combo].copy()
+            cov_df = cov_matrix_dict[combo]
             cov = cov_df.loc[tickers, tickers].values
         except Exception as e:
-            invalid_log.append((combo, f"❌ Missing covariance matrix: {e}"))
+            invalid_log.append((combo, f"❌ Missing or invalid covariance matrix: {e}"))
             continue
 
-        # 3. Validation checks
+        # 3. Validation
         if np.any(np.isnan(mu)) or np.any(np.isinf(mu)):
             invalid_log.append((combo, "❌ mu contains NaN or Inf"))
             continue
@@ -53,17 +47,15 @@ def run(adj_returns_combinations, cov_matrix_dict):
             invalid_log.append((combo, f"❌ Covariance eig failed: {e}"))
             continue
 
-        # 4. Passed all checks
+        # Passed all checks
         valid_combinations.append(combo)
 
-    # --- Logging ---
+    # Logging
     print("\n📊 Portfolio Feasibility Check Summary")
     print("--------------------------------------------------")
     print(f"✅ Valid combinations: {len(valid_combinations)}")
     print(f"❌ Invalid combinations: {len(invalid_log)}")
-
-    if invalid_log:
-        for combo, reason in invalid_log:
-            warnings.warn(f"[{combo}] {reason}")
+    for combo, reason in invalid_log:
+        warnings.warn(f"[{combo}] {reason}")
 
     return valid_combinations
