@@ -112,7 +112,8 @@ if run_analysis:
                 sigma_c=sigma_c,
                 expected_rc=expected_rc,
                 y_capped=y_capped,
-                y_opt=y_opt
+                y_opt=y_opt,
+                tickers=tickers_portfolio
             )
 
             block_i_performance_analysis.run(
