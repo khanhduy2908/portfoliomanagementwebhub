@@ -93,6 +93,11 @@ if run_analysis:
             )
             st.success("Block H – Complete portfolio construction finished.")
 
+            block_h1_visualization.run(capital_alloc, config.total_capital)
+            block_h2_visualization.run(hrp_cvar_results, returns_benchmark, adj_returns_combinations,
+                                       cov_matrix_dict, best_portfolio, weights, tickers_portfolio,
+                                       config.rf, sigma_c, expected_rc)
+
             block_i_performance_analysis.run(
                 best_portfolio, returns_pivot_stocks, returns_benchmark,
                 config.rf, config.A, config.total_capital,
@@ -110,7 +115,6 @@ if run_analysis:
                 weights, tickers_portfolio,
                 config.start_date, config.end_date, config.rf
             )
-            st.success("Block I1 I2 – Performance and benchmark visualizations generated.")
 
             block_j_stress_testing.run(
                 best_portfolio, latest_data, data_stocks, returns_pivot_stocks, config.rf
