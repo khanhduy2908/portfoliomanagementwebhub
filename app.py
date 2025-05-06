@@ -93,7 +93,7 @@ if run_analysis:
                 hrp_cvar_results, adj_returns_combinations, cov_matrix_dict,
                 config.rf, config.A, config.total_capital
             )
-            print("✅ Block H return OK:", type(best_portfolio), type(weights))
+            print("Block H return OK:", type(best_portfolio), type(weights))
             st.success("Block H – Complete portfolio construction finished.")
 
             block_h1_visualization.run(capital_alloc, config.total_capital)
