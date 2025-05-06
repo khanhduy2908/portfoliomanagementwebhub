@@ -17,18 +17,23 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     tickers = list(best_portfolio['Weights'].keys())
     weights = np.array(list(best_portfolio['Weights'].values()))
 
-    # Format portfolio name to readable style
+    # --- Convert portfolio name to readable string ---
     if isinstance(best_key, tuple):
         portfolio_name = '-'.join(best_key)
     else:
         portfolio_name = str(best_key)
 
-    mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
-    cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
+    # --- Extract return vector and covariance matrix ---
+    try:
+        mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
+        cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
+    except Exception as e:
+        raise ValueError(f"Portfolio combination mismatch: {e}")
 
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = np.dot(weights, mu)
 
+    # --- Compute complete portfolio allocation ---
     y_opt = (mu_p - rf) / (A * sigma_p ** 2)
     y_capped = np.clip(y_opt, y_min, y_max)
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
