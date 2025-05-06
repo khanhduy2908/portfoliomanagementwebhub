@@ -1,62 +1,55 @@
+import pandas as pd
 import numpy as np
-import cvxpy as cp
 import warnings
 
-def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, total_capital,
-        alpha_cvar=0.95, lambda_cvar=10, beta_l2=0.05, n_simulations=30000,
-        y_min=0.6, y_max=0.9):
-    
-    if not hrp_cvar_results:
-        raise ValueError("No valid HRP-CVaR results from Block G.")
+# Fallback for vnstock import
+try:
+    from vnstock import stock_historical_data
+except ImportError:
+    from vnstock import get_price_data as stock_historical_data
 
-    # --- Select best portfolio by Sharpe Ratio ---
-    best_key = max(hrp_cvar_results, key=lambda k: hrp_cvar_results[k]['Sharpe Ratio'])
-    best_portfolio = hrp_cvar_results[best_key]
-    tickers = list(best_portfolio['Weights'].keys())
-    weights = np.array(list(best_portfolio['Weights'].values()))
-    portfolio_name = best_key  # tuple
+def fetch_valid_data(symbol, start_date, end_date):
+    try:
+        df = stock_historical_data(
+            symbol=symbol,
+            start_date=start_date.strftime('%Y-%m-%d'),
+            end_date=end_date.strftime('%Y-%m-%d'),
+            resolution='1M',
+            type='stock',
+            source='VCI'
+        )
+        if df is None or df.empty:
+            warnings.warn(f"⚠️ {symbol}: No data returned.")
+            return None
+        df['time'] = pd.to_datetime(df['time'])
+        df['Ticker'] = symbol
+        return df
+    except Exception as e:
+        warnings.warn(f"⚠️ {symbol}: Failed to fetch data. Reason: {e}")
+        return None
 
-    # --- Expected returns & covariance ---
-    mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
-    cov = cov_matrix_dict[portfolio_name].loc[tickers, tickers].values
+def run(tickers, benchmark_symbol, start_date, end_date):
+    stock_data = []
+    for ticker in tickers:
+        df = fetch_valid_data(ticker, start_date, end_date)
+        if df is not None:
+            stock_data.append(df)
 
-    # --- Simulate returns ---
-    np.random.seed(42)
-    simulated_returns = np.random.multivariate_normal(mean=mu, cov=cov, size=n_simulations)
+    if not stock_data:
+        raise ValueError("❌ No valid stock data retrieved.")
 
-    portfolio_returns = simulated_returns @ weights
-    expected_rc = np.mean(portfolio_returns)
-    sigma_c = np.std(portfolio_returns)
+    data_stocks = pd.concat(stock_data).sort_values(by='time')
+    data_stocks['Return'] = data_stocks.groupby('Ticker')['Close'].pct_change() * 100
 
-    # --- Compute optimal capital allocation y* ---
-    y_opt = (expected_rc - rf) / (A * sigma_c ** 2)
-    y_capped = max(min(y_opt, y_max), y_min)
+    # Pivot returns for easier matrix calculation
+    returns_pivot_stocks = data_stocks.pivot(index='time', columns='Ticker', values='Return')
 
-    # --- Final capital allocation ---
-    capital_risky = y_capped * total_capital
-    capital_rf = total_capital - capital_risky
+    # Benchmark
+    df_benchmark = fetch_valid_data(benchmark_symbol, start_date, end_date)
+    if df_benchmark is None:
+        raise ValueError(f"❌ Failed to retrieve benchmark data: {benchmark_symbol}")
+    df_benchmark['Benchmark_Return'] = df_benchmark['Close'].pct_change() * 100
+    returns_benchmark = df_benchmark[['time', 'Benchmark_Return']].dropna()
+    returns_benchmark.set_index('time', inplace=True)
 
-    capital_alloc = {
-        t: round(w * capital_risky, 0) for t, w in zip(tickers, weights)
-    }
-
-    utility = y_capped * (expected_rc - rf) - 0.5 * A * (y_capped * sigma_c) ** 2
-
-    portfolio_info = {
-        "Portfolio Name": "-".join(tickers),
-        "Expected Return": expected_rc,
-        "Portfolio Volatility": sigma_c,
-        "Risk-Free Rate": rf,
-        "Risk Aversion (A)": A,
-        "y_opt": y_opt,
-        "y_capped": y_capped,
-        "Total Capital": total_capital,
-        "Capital Risky": capital_risky,
-        "Capital Risk-Free": capital_rf,
-        "Utility": utility
-    }
-
-    return (
-        best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc,
-        weights, tickers, portfolio_info, simulated_returns, cov, mu, y_opt
-    )
+    return data_stocks, df_benchmark, returns_pivot_stocks, returns_benchmark, list(returns_pivot_stocks.columns)
