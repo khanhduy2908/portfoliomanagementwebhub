@@ -117,8 +117,7 @@ if run_analysis:
             st.success("G – HRP + CVaR Optimization Done")
 
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, sigma_p, mu, y_opt, mu_p, cov = block_h_complete_portfolio.run(
-                hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
-                config.rf, config.A, config.total_capital
+                hrp_result_dict, adj_returns_combinations, cov_matrix_dict, config.rf, config.A, config.total_capital, config.risk_score, y_min=config.y_min, y_max=config.y_max
             )
             st.success("H – Optimal Portfolio Constructed")
 
