@@ -3,8 +3,14 @@ import streamlit as st
 import pandas as pd
 
 def run(capital_alloc, capital_rf, capital_risky, tickers):
-    if not capital_alloc or not tickers or capital_rf is None or capital_risky is None:
-        st.error("⚠️ Missing capital allocation inputs.")
+    if not capital_alloc:
+        st.error("⚠️ Capital allocation dictionary is empty.")
+        return
+    if not tickers:
+        st.error("⚠️ No tickers provided for visualization.")
+        return
+    if capital_rf is None or capital_risky is None:
+        st.error("⚠️ Risk-free or risky capital is missing.")
         return
 
     try:
@@ -41,7 +47,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         for autotext in autotexts:
             autotext.set_color('white')
 
-        ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
+        ax.set_title("Capital Allocation: Risk-Free vs Risky Assets", fontsize=12, color='white')
         fig.patch.set_facecolor('#1e1e1e')
         ax.set_facecolor('#1e1e1e')
         st.pyplot(fig)
@@ -60,4 +66,5 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
         st.markdown("**Capital Breakdown**")
+        st.markdown("Capital in VND. Allocation rounded to 0.1%.")
         st.dataframe(summary_df, use_container_width=True, height=260)
