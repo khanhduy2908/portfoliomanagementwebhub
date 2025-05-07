@@ -1,5 +1,3 @@
-# utils/block_d_forecast.py
-
 import os
 import pandas as pd
 import numpy as np
@@ -72,7 +70,11 @@ def train_stacked_model(X, y, n_folds=5):
                 max_epochs=100,
                 batch_size=256,
                 virtual_batch_size=128,
-                callbacks=[EarlyStopping(patience=10, early_stopping_metric='valid_mae', is_maximize=False)]
+                callbacks=[EarlyStopping(
+                    patience=10,
+                    early_stopping_metric='valid_mae',
+                    is_maximize=False
+                )]
             )
             oof_preds_tab.append(model_tab.predict(X_valid).squeeze())
         except Exception as e:
@@ -99,7 +101,7 @@ def run(data_stocks, selected_tickers, selected_combinations):
         df_feat = engineer_features(df, ticker_id=i)
 
         if df_feat.empty or df_feat.shape[0] < lookback + 5:
-            warnings.warn(f"⚠️ {ticker}: not enough data.")
+            warnings.warn(f"{ticker}: not enough data.")
             continue
 
         df_feat['Ticker'] = ticker
@@ -111,7 +113,6 @@ def run(data_stocks, selected_tickers, selected_combinations):
 
     features_df = pd.concat(features_all, ignore_index=True)
     os.makedirs("saved_models", exist_ok=True)
-
     forecast_valid_combos = []
 
     for combo in selected_combinations:
@@ -142,11 +143,10 @@ def run(data_stocks, selected_tickers, selected_combinations):
         base_models, meta_model = train_stacked_model(X, y)
 
         adj_return_dict = {}
+        valid_forecast_found = False
+
         for t in subset:
-            df_last = features_df[features_df['Ticker'] == t].sort_values('time')
-            if df_last.shape[0] < lookback:
-                continue
-            df_last = df_last.iloc[-lookback:]
+            df_last = features_df[features_df['Ticker'] == t].sort_values('time').iloc[-lookback:]
             if df_last.shape[0] < lookback:
                 continue
 
@@ -154,38 +154,32 @@ def run(data_stocks, selected_tickers, selected_combinations):
             for lag in reversed(range(lookback)):
                 for col in feature_cols:
                     X_last.append(df_last[col].iloc[lag])
+            X_last = scaler.transform([X_last])
 
-            try:
-                X_last_scaled = scaler.transform([X_last])
-                pred_lgb = base_models[-1][0].predict(X_last_scaled)
-                pred_xgb = base_models[-1][1].predict(X_last_scaled)
-                pred_tab = base_models[-1][2].predict(X_last_scaled).squeeze() if base_models[-1][2] else 0
-                X_stack = np.column_stack([pred_lgb, pred_xgb, [pred_tab]])
-                final = meta_model.predict(X_stack)[0]
-                adj_return_dict[t] = final
-            except Exception as e:
-                warnings.warn(f"⚠️ Prediction failed for {t}: {e}")
-                continue
+            pred_lgb = base_models[-1][0].predict(X_last)
+            pred_xgb = base_models[-1][1].predict(X_last)
+            pred_tab = base_models[-1][2].predict(X_last).squeeze() if base_models[-1][2] else 0
+            X_stack = np.column_stack([pred_lgb, pred_xgb, [pred_tab]])
+            final = meta_model.predict(X_stack)[0]
 
-        if len(adj_return_dict) < 3:
-            warnings.warn(f"⚠️ Skipped {subset}: not enough valid predictions.")
-            continue
+            adj_return_dict[t] = final
+            valid_forecast_found = True
 
-        model_store_obj = {
-            'scaler': scaler,
-            'base_models': base_models[-1],
-            'meta_model': meta_model,
-            'features': [f"{col}_t-{lag}" for lag in reversed(range(lookback)) for col in feature_cols]
-        }
+        if valid_forecast_found:
+            model_store_obj = {
+                'scaler': scaler,
+                'base_models': base_models[-1],
+                'meta_model': meta_model,
+                'features': [f"{col}_t-{lag}" for lag in reversed(range(lookback)) for col in feature_cols]
+            }
+            adj_returns_combinations[subset] = adj_return_dict
+            model_store[subset] = model_store_obj
+            forecast_valid_combos.append(subset)
 
-        adj_returns_combinations[subset] = adj_return_dict
-        model_store[subset] = model_store_obj
-        forecast_valid_combos.append(subset)
-
-        joblib.dump({
-            'adj_return': adj_return_dict,
-            'model_store': model_store_obj
-        }, model_path)
+            joblib.dump({
+                'adj_return': adj_return_dict,
+                'model_store': model_store_obj
+            }, model_path)
 
     if not adj_returns_combinations:
         raise ValueError("❌ No valid combination has forecast results.")
