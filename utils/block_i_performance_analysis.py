@@ -84,7 +84,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         'Value': [alpha, beta, r2, tracking_error, info_ratio]
     })
 
-    # --- Visualizations ---
+    # === Visualization ===
     st.subheader("Cumulative Returns")
     fig1, ax1 = plt.subplots(figsize=(10, 4), facecolor='#1e1e1e')
     ax1.plot(cumulative_returns.index, cumulative_returns, label='Portfolio', color='cyan')
@@ -122,7 +122,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         else:
             st.warning("Not enough data for rolling Sharpe ratio.")
 
-    st.subheader("Performance Summary")
+    st.subheader("Performance Summary Table")
     st.dataframe(summary_df.round(4), use_container_width=True)
 
     st.subheader("Regression Statistics")
