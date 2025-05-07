@@ -74,7 +74,10 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         'sigma_c': sigma_c,
         'utility': utility,
         'capital_risky': capital_risky,
-        'capital_rf': capital_rf
+        'capital_rf': capital_rf,
+        'total_capital': total_capital,
+        'tickers': tickers,
+        'weights': weights.tolist()
     }
 
     return (best_portfolio, y_capped, capital_alloc,
