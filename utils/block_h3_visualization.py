@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
-        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers):
+        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, cov):
 
     st.markdown("### HRP vs Benchmark and Efficient Frontier with CAL")
 
