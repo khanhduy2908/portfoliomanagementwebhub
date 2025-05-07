@@ -66,5 +66,4 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
         st.markdown("**Capital Breakdown**")
-        st.markdown("Capital in VND. Allocation rounded to 0.1%.")
         st.dataframe(summary_df, use_container_width=True, height=260)
