@@ -50,5 +50,3 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
     ax.grid(False)
 
     st.pyplot(fig)
-    st.markdown("#### Selected Tickers")
-    st.write(", ".join(tickers))
