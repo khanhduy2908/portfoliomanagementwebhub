@@ -29,29 +29,20 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = np.dot(weights, mu)
 
-    # --- Risk profile constraints ---
-    score = getattr(config, 'risk_score', 25)
-    if 10 <= score <= 17:
-        max_rf_ratio = 0.85
-    elif 18 <= score <= 27:
-        max_rf_ratio = 0.5
-    elif 28 <= score <= 40:
-        max_rf_ratio = 0.2
-    else:
-        max_rf_ratio = 0.5  # fallback
+    # --- Risk profile constraints (overwritten from app.py) ---
+    y_min = getattr(config, 'y_min', 0.7)
+    y_max = getattr(config, 'y_max', 0.95)
 
-    # --- Utility Optimization (bounded by max_rf_ratio) ---
+    # --- Utility Optimization within bounds ---
     def utility_neg(y):
         expected_rc = y * mu_p + (1 - y) * rf
         sigma_c = y * sigma_p
         utility = expected_rc - 0.5 * A * sigma_c**2
         return -utility
 
-    bounds = (0, 1 - max_rf_ratio)
-    opt_result = minimize_scalar(utility_neg, bounds=bounds, method='bounded')
-
+    opt_result = minimize_scalar(utility_neg, bounds=(y_min, y_max), method='bounded')
     y_opt = opt_result.x
-    y_capped = np.clip(y_opt, config.y_min, config.y_max)
+    y_capped = np.clip(y_opt, y_min, y_max)
 
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
@@ -74,11 +65,13 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         'sigma_c': sigma_c,
         'utility': utility,
         'capital_risky': capital_risky,
-        'capital_rf': capital_rf,
-        'total_capital': total_capital,
-        'tickers': tickers,
-        'weights': weights.tolist()
+        'capital_rf': capital_rf
     }
+
+    # --- Warning if risk-free allocation is too high ---
+    risk_free_ratio = capital_rf / total_capital
+    if risk_free_ratio > 0.4:
+        warnings.warn(f"Risk-Free allocation exceeded 40%: {risk_free_ratio:.2%}")
 
     return (best_portfolio, y_capped, capital_alloc,
             sigma_c, expected_rc, weights, tickers,
