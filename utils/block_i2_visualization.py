@@ -1,3 +1,5 @@
+# utils/block_i2_visualization.py
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -40,14 +42,16 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
 
     # STEP 2: Compute returns
     try:
-        portfolio_returns = df_prices.pct_change().dropna().values @ weights
+        returns_matrix = df_prices.pct_change().dropna()
+        portfolio_returns = returns_matrix @ weights
+        portfolio_returns = pd.Series(portfolio_returns, index=returns_matrix.index)
     except Exception as e:
         st.error(f"Portfolio return computation failed: {str(e)}")
         return
 
     benchmark_returns = df_benchmark[benchmark_symbol].pct_change().dropna()
 
-    if len(portfolio_returns) == 0 or benchmark_returns.empty:
+    if portfolio_returns.empty or benchmark_returns.empty:
         st.warning("Insufficient return data.")
         return
 
@@ -75,7 +79,6 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
         ax1.grid(False)
         ax1.tick_params(colors='white')
         ax1.set_facecolor('#1e1e1e')
-
         st.pyplot(fig1)
 
     # === Chart 2: Risk vs Return Bubble ===
