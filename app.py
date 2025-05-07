@@ -46,7 +46,7 @@ def get_risk_profile_description(score):
 with open("utils/valid_tickers.txt", "r") as f:
     valid_tickers = sorted([line.strip() for line in f if line.strip()])
 
-st.set_page_config(page_title="Institutional Portfolio Optimization", layout="wide")
+st.set_page_config(page_title="Portfolio Optimization Platform", layout="wide")
 st.title("Institutional Portfolio Optimization Platform")
 
 st.sidebar.header("Configuration")
