@@ -1,5 +1,3 @@
-# utils/block_h2_visualization.py
-
 import matplotlib.pyplot as plt
 import streamlit as st
 import pandas as pd
@@ -30,7 +28,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         for autotext in autotexts:
             autotext.set_color('white')
 
-        ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
+        ax.set_title("Complete Portfolio Capital Allocation", fontsize=12, color='white')
         fig.patch.set_facecolor('#1e1e1e')
         ax.set_facecolor('#1e1e1e')
         st.pyplot(fig)
@@ -48,5 +46,5 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         }])
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
-        st.markdown("**Capital Breakdown**")
+        st.markdown("### Capital Allocation Summary")
         st.dataframe(summary_df, use_container_width=True, height=260)
