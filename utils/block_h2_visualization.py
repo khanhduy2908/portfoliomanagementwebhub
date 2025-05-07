@@ -12,8 +12,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         sizes = [capital_rf]  # Khởi tạo với capital_rf (tài sản không rủi ro)
         
         # Kiểm tra và lấy giá trị từ capital_alloc cho mỗi ticker
-        for t in tickers:
-            sizes.append(capital_alloc.get(t, 0))  # Nếu ticker không có trong capital_alloc, gán giá trị mặc định là 0
+        sizes.extend([capital_alloc.get(t, 0) for t in tickers])  # Thay thế dấu cộng + bằng extend
     except KeyError as e:
         st.error(f"⚠️ Missing allocation for ticker: {e}")
         return
