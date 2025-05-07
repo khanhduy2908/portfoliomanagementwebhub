@@ -153,8 +153,7 @@ if run_analysis:
                 expected_rc=expected_rc,
                 y_capped=y_capped,
                 y_opt=y_opt,
-                tickers=tickers_portfolio,
-                weights=weights
+                tickers=tickers_portfolio
             )
             st.success("Block H3 – Efficient Frontier and CAL displayed.")
 
