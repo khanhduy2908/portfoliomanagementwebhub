@@ -5,18 +5,29 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
-        mu_p, cov, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, weights):
+        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers):
 
     st.markdown("### HRP vs Benchmark and Efficient Frontier with CAL")
 
     # --- HRP vs Benchmark (Bar Chart) ---
     st.markdown("#### HRP Portfolios vs Benchmark")
     combos = list(hrp_result_dict.keys())[:5]
-    returns = [hrp_result_dict[x]['Expected Return (%)'] for x in combos]
-    vols = [hrp_result_dict[x]['Volatility (%)'] for x in combos]
-    cvars = [hrp_result_dict[x]['CVaR (%)'] for x in combos]
+    returns, vols, cvars, labels = [], [], [], []
 
-    x = np.arange(len(combos))
+    for x in combos:
+        key = '-'.join(x) if isinstance(x, tuple) else str(x)
+        res = hrp_result_dict.get(x, None) or hrp_result_dict.get(key, None)
+        if res:
+            returns.append(res['Expected Return (%)'])
+            vols.append(res['Volatility (%)'])
+            cvars.append(res['CVaR (%)'])
+            labels.append(key)
+
+    if not returns:
+        st.warning("No valid portfolios available for visualization.")
+        return
+
+    x = np.arange(len(labels))
     width = 0.25
 
     fig1, ax1 = plt.subplots(figsize=(10, 5), facecolor='black')
@@ -27,7 +38,7 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
                 label=f"Benchmark Return ({benchmark_return_mean * 100:.2f}%)")
 
     ax1.set_xticks(x)
-    ax1.set_xticklabels(combos, rotation=45)
+    ax1.set_xticklabels(labels, rotation=45)
     ax1.set_facecolor('black')
     ax1.set_title("HRP Portfolio Comparison", color='white')
     ax1.set_ylabel("Percentage (%)", color='white')
@@ -44,16 +55,18 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
     sigma_list = np.array(results_ef[1])
     sharpe_list = np.array(results_ef[2])
 
+    if len(mu_list) == 0 or len(sigma_list) == 0:
+        st.warning("Insufficient data for efficient frontier.")
+        return
+
     scatter = ax2.scatter(sigma_list, mu_list, c=sharpe_list, cmap='viridis', alpha=0.6, label='Portfolios')
     plt.colorbar(scatter, ax=ax2, label='Sharpe Ratio')
 
-    sigma_p = np.sqrt(weights.T @ cov @ weights)
-
     ax2.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=200,
-                label=f'Optimal Risky Portfolio ({best_portfolio["Portfolio"]})')
+                label=f'Optimal Risky Portfolio')
     ax2.scatter(0, rf * 100, c='white', marker='o', s=100, label=f'Risk-Free Rate ({rf * 100:.2f}%)')
 
-    slope = (mu_p - rf) / sigma_p if sigma_p > 0 else 0
+    slope = (mu_p - rf) / sigma_p if sigma_p != 0 else 0
     x_cal = np.linspace(0, max(sigma_list) * 1.5, 100)
     y_cal = rf * 100 + slope * x_cal
     ax2.plot(x_cal, y_cal, 'r--', label='Capital Allocation Line (CAL)')
@@ -65,7 +78,7 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
         sigma_uncapped = y_opt * sigma_p
         expected_uncapped = y_opt * mu_p + (1 - y_opt) * rf
         ax2.scatter(sigma_uncapped * 100, expected_uncapped * 100, c='purple', marker='D', s=150,
-                    label=f'Optimal Complete Portfolio (y={y_opt:.2f})')
+                    label=f'Unconstrained (y={y_opt:.2f})')
 
     ax2.set_facecolor('black')
     ax2.set_title('Efficient Frontier with CAL', color='white')
@@ -78,4 +91,5 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
 
     st.markdown("#### Portfolio Tickers")
     st.write(f"Selected tickers: {', '.join(tickers)}")
+
     st.pyplot(fig2)
