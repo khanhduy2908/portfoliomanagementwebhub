@@ -9,26 +9,26 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     if not hrp_result_dict:
         raise ValueError("No valid HRP-CVaR results from Block G.")
 
-    # 1. Select best portfolio by Sharpe Ratio
+    # 1. Select the best portfolio based on Sharpe Ratio
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
     tickers = list(best_portfolio['Weights'].keys())
+    weights = np.array([best_portfolio['Weights'][t] for t in tickers])
+    weights /= weights.sum()
 
-    weights = np.array([best_portfolio['Weights'][t] for t in tickers], dtype=np.float64)
-    if weights.sum() == 0:
-        raise ValueError("Sum of weights is zero, cannot normalize.")
-    weights = weights / weights.sum()
-
-    # 2. Extract expected returns and covariance matrix
+    # 2. Calculate portfolio return and volatility
     portfolio_name = '-'.join(best_key) if isinstance(best_key, tuple) else str(best_key)
-    mu = np.array([adj_returns_combinations[best_key][t] for t in tickers], dtype=np.float64) / 100
-    cov_df = cov_matrix_dict[best_key]
-    cov = cov_df.loc[tickers, tickers].values
+    mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
+    cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
 
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = weights @ mu
 
-    # 3. Define max risk-free asset ratio by risk score
+    # Safety check: Skip portfolios with zero return or volatility
+    if mu_p <= 0 or sigma_p <= 0:
+        raise ValueError("Selected portfolio has non-positive return or volatility.")
+
+    # 3. Risk-free allocation constraint based on user's risk score
     if 10 <= risk_score <= 17:
         max_rf_ratio = 0.40
     elif 18 <= risk_score <= 27:
@@ -45,14 +45,14 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         return -(expected_rc - 0.5 * A * sigma_c**2)
 
     upper_bound = min(y_max, 1 - max_rf_ratio)
-    if y_min > upper_bound:
-        raise ValueError("Risk-free allocation constraint is too strict for given y_min/y_max and risk_score.")
+    if upper_bound <= y_min:
+        raise ValueError("Risk constraints too tight: upper_bound <= y_min")
 
     result = minimize_scalar(neg_utility, bounds=(y_min, upper_bound), method='bounded')
     y_opt = result.x
     y_capped = np.clip(y_opt, y_min, upper_bound)
 
-    # 5. Compute optimal complete portfolio stats
+    # 5. Compute complete portfolio metrics
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c**2
@@ -61,6 +61,7 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     capital_rf = total_capital - capital_risky
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
+    # 6. Output information
     portfolio_info = {
         'portfolio_name': portfolio_name,
         'mu': mu_p,
