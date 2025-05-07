@@ -7,35 +7,28 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         st.error("⚠️ Missing capital allocation inputs.")
         return
 
-    try:
-        # Tạo danh sách sizes cho việc phân bổ vốn (bao gồm cả tài sản không có rủi ro)
-        sizes = [capital_rf]  # Khởi tạo với capital_rf (tài sản không rủi ro)
-        
-        # Kiểm tra và lấy giá trị từ capital_alloc cho mỗi ticker
-        sizes.extend([capital_alloc.get(t, 0) for t in tickers])  # Thay thế dấu cộng + bằng extend
-    except KeyError as e:
-        st.error(f"⚠️ Missing allocation for ticker: {e}")
-        return
+    # Kiểm tra phân bổ vốn cho các ticker
+    sizes = [capital_rf]  # Bắt đầu với capital_rf (tài sản không có rủi ro)
+    sizes.extend([capital_alloc.get(t, 0) for t in tickers])  # Lấy phân bổ cho các ticker, mặc định là 0 nếu không có
 
-    # Các nhãn cho biểu đồ pie chart
-    labels = ['Risk-Free Asset'] + tickers
-    total = capital_rf + capital_risky  # Tổng vốn đầu tư
+    labels = ['Risk-Free Asset'] + tickers  # Nhãn cho biểu đồ
+    total = capital_rf + capital_risky  # Tổng tài sản
+
     if total == 0:
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
-    # Tính tỷ lệ phần trăm cho từng tài sản
+    # Tính tỷ lệ phần trăm phân bổ cho mỗi phần tử
     percentages = [s / total * 100 for s in sizes]
 
-    # Chia giao diện thành 2 cột
+    # Sử dụng 2 cột trong Streamlit để chia không gian giữa biểu đồ và bảng phân bổ
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        # Vẽ Pie Chart để phân bổ vốn
         fig, ax = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
-        colors = plt.cm.Set3.colors[:len(labels)]
+        colors = plt.cm.Set3.colors[:len(labels)]  # Chọn màu sắc từ bảng màu Set3 của matplotlib
 
-        # Tạo biểu đồ Pie
+        # Vẽ biểu đồ pie
         wedges, texts, autotexts = ax.pie(
             sizes,
             labels=labels,
@@ -45,19 +38,19 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
             textprops={'color': 'white', 'fontsize': 10}
         )
 
-        # Định dạng màu sắc cho text trong Pie chart
+        # Đặt màu cho các văn bản trên biểu đồ
         for text in texts:
             text.set_color('white')
         for autotext in autotexts:
             autotext.set_color('white')
 
-        ax.set_title("Capital Allocation: Risk-Free vs Risky Assets", fontsize=12, color='white')
+        ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
         fig.patch.set_facecolor('#1e1e1e')
         ax.set_facecolor('#1e1e1e')
         st.pyplot(fig)
 
     with col2:
-        # Tạo bảng phân bổ vốn
+        # Tạo bảng hiển thị phân bổ vốn
         summary_df = pd.DataFrame({
             "Asset": labels,
             "Capital (VND)": [f"{v:,.0f}" for v in sizes],
@@ -70,6 +63,6 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         }])
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
-        # Hiển thị bảng phân bổ vốn
         st.markdown("**Capital Breakdown**")
+        st.markdown("Capital in VND. Allocation rounded to 0.1%.")
         st.dataframe(summary_df, use_container_width=True, height=260)
