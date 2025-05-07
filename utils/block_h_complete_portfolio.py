@@ -77,5 +77,5 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     }
 
     return (best_portfolio, y_capped, capital_alloc,
-            sigma_c, expected_rc, weights, tickers,
-            portfolio_info, sigma_p, mu, y_opt)
+        sigma_c, expected_rc, weights, tickers,
+        portfolio_info, sigma_p, mu, y_opt, mu_p)
