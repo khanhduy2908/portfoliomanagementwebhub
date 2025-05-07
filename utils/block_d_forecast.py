@@ -1,3 +1,5 @@
+# utils/block_d_forecast.py
+
 import os
 import pandas as pd
 import numpy as np
@@ -70,11 +72,7 @@ def train_stacked_model(X, y, n_folds=5):
                 max_epochs=100,
                 batch_size=256,
                 virtual_batch_size=128,
-                callbacks=[EarlyStopping(
-                    patience=10,
-                    early_stopping_metric='valid_mae',
-                    is_maximize=False
-                )]
+                callbacks=[EarlyStopping(patience=10, early_stopping_metric='valid_mae', is_maximize=False)]
             )
             oof_preds_tab.append(model_tab.predict(X_valid).squeeze())
         except Exception as e:
@@ -145,20 +143,33 @@ def run(data_stocks, selected_tickers, selected_combinations):
 
         adj_return_dict = {}
         for t in subset:
-            df_last = features_df[features_df['Ticker'] == t].sort_values('time').iloc[-lookback:]
+            df_last = features_df[features_df['Ticker'] == t].sort_values('time')
             if df_last.shape[0] < lookback:
                 continue
+            df_last = df_last.iloc[-lookback:]
+            if df_last.shape[0] < lookback:
+                continue
+
             X_last = []
             for lag in reversed(range(lookback)):
                 for col in feature_cols:
                     X_last.append(df_last[col].iloc[lag])
-            X_last = scaler.transform([X_last])
-            pred_lgb = base_models[-1][0].predict(X_last)
-            pred_xgb = base_models[-1][1].predict(X_last)
-            pred_tab = base_models[-1][2].predict(X_last).squeeze() if base_models[-1][2] else 0
-            X_stack = np.column_stack([pred_lgb, pred_xgb, [pred_tab]])
-            final = meta_model.predict(X_stack)[0]
-            adj_return_dict[t] = final
+
+            try:
+                X_last_scaled = scaler.transform([X_last])
+                pred_lgb = base_models[-1][0].predict(X_last_scaled)
+                pred_xgb = base_models[-1][1].predict(X_last_scaled)
+                pred_tab = base_models[-1][2].predict(X_last_scaled).squeeze() if base_models[-1][2] else 0
+                X_stack = np.column_stack([pred_lgb, pred_xgb, [pred_tab]])
+                final = meta_model.predict(X_stack)[0]
+                adj_return_dict[t] = final
+            except Exception as e:
+                warnings.warn(f"⚠️ Prediction failed for {t}: {e}")
+                continue
+
+        if len(adj_return_dict) < 3:
+            warnings.warn(f"⚠️ Skipped {subset}: not enough valid predictions.")
+            continue
 
         model_store_obj = {
             'scaler': scaler,
