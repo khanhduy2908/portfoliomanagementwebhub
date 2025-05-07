@@ -23,22 +23,24 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
 
     col1, col2 = st.columns(2)
 
+    # === Chart 1: Cumulative Return Line Chart ===
     with col1:
         fig1, ax1 = plt.subplots(figsize=(6, 4), facecolor='#1e1e1e')
         for ticker in tickers:
             ax1.plot(cum_returns.index, cum_returns[ticker], label=ticker, linewidth=1.8)
-        ax1.set_title("Cumulative Returns", color='white')
+        ax1.set_title("Cumulative Returns", color='white', fontsize=12)
         ax1.set_xlabel("Date", color='white')
         ax1.set_ylabel("Growth Index", color='white')
         ax1.legend(fontsize=8, facecolor='#1e1e1e', labelcolor='white')
         ax1.tick_params(colors='white')
         ax1.grid(False)
         ax1.set_facecolor('#1e1e1e')
+        fig1.patch.set_facecolor('#1e1e1e')
         st.pyplot(fig1)
 
+    # === Chart 2: Risk-Return Bubble Chart with Sharpe Ratio Coloring ===
     with col2:
         fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor='#1e1e1e')
-
         cmap = cm.coolwarm
         norm = Normalize(vmin=sharpe_ratios.min(), vmax=sharpe_ratios.max())
         colors = cmap(norm(sharpe_ratios))
@@ -67,12 +69,13 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
                 weight='bold'
             )
 
-        ax2.set_title("Risk vs Return", color='white')
+        ax2.set_title("Risk vs Return", color='white', fontsize=12)
         ax2.set_xlabel("Volatility (%)", color='white')
         ax2.set_ylabel("Return (%)", color='white')
         ax2.tick_params(colors='white')
         ax2.grid(False)
         ax2.set_facecolor('#1e1e1e')
+        fig2.patch.set_facecolor('#1e1e1e')
 
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
