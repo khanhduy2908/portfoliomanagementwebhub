@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import t
+from scipy.stats import t as t_dist
 from datetime import datetime
 import streamlit as st
 
@@ -19,29 +19,36 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     beta_dict = latest_data.set_index('Ticker')['Beta'].to_dict()
 
     df_price = data_stocks[data_stocks['Ticker'].isin(tickers)].copy()
-    df_price['time'] = pd.to_datetime(df_price['time'])
+    df_price['time'] = pd.to_datetime(df_price['time'], errors='coerce')
     df_pivot = df_price.pivot(index='time', columns='Ticker', values='Close').sort_index()
-    monthly_returns = df_pivot.pct_change().dropna()
+    df_pivot = df_pivot.dropna(axis=1, how='any')
 
-    mu_vec = np.array([monthly_returns[t].mean() for t in tickers])
-    cov_matrix = monthly_returns[tickers].cov().values
+    valid_tickers = [t for t in tickers if t in df_pivot.columns]
+    if len(valid_tickers) < len(tickers):
+        st.warning(f"Some tickers missing in price data: {set(tickers) - set(valid_tickers)}")
 
-    # === F.1 Auto Scenario Stress ===
+    tickers = valid_tickers
+    weights = np.array([best_portfolio['Weights'][t] for t in tickers])
+    monthly_returns = df_pivot[tickers].pct_change().dropna()
+
+    mu_vec = monthly_returns.mean().values
+    cov_matrix = monthly_returns.cov().values
+
     def generate_auto_shocks(tickers, beta_dict, base_rate_shock, inflation_shock):
-        shock_dict = {
+        scenarios = {
             "Interest Rate Shock": {},
             "Tech Crash": {},
             "Inflation Shock": {}
         }
         for t in tickers:
             beta = beta_dict.get(t, 1.0)
-            shock_dict["Interest Rate Shock"][t] = base_rate_shock * beta
-            shock_dict["Inflation Shock"][t] = inflation_shock * beta
+            scenarios["Interest Rate Shock"][t] = base_rate_shock * beta
+            scenarios["Inflation Shock"][t] = inflation_shock * beta
             if beta >= 1.2:
-                shock_dict["Tech Crash"][t] = -0.25
+                scenarios["Tech Crash"][t] = -0.25
             elif beta >= 1.0:
-                shock_dict["Tech Crash"][t] = -0.15
-        return shock_dict
+                scenarios["Tech Crash"][t] = -0.15
+        return scenarios
 
     scenario_map = generate_auto_shocks(tickers, beta_dict, shock_scale_interest, shock_scale_inflation)
 
@@ -51,19 +58,16 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
         port_ret = np.dot(weights, shock_vector)
         hypo_results.append({'Scenario': name, 'Portfolio Return (%)': port_ret * 100})
 
-    # === F.2 Historical Stress ===
     historical_shock = -0.25
     stress_replay = np.array([beta_dict.get(t, 1.0) * historical_shock for t in tickers])
     portfolio_drop_hist = np.dot(weights, stress_replay)
 
-    # === F.3 Monte Carlo Simulation ===
     sim_stress = np.random.multivariate_normal(mu_vec, cov_matrix, size=n_simulations)
-    sim_stress += t.rvs(t_dist_df, size=(n_simulations, len(tickers))) * 0.02
+    sim_stress += t_dist.rvs(t_dist_df, size=(n_simulations, len(tickers))) * 0.02
     returns_sim = sim_stress @ weights
     stress_var = -np.percentile(returns_sim, 100 - confidence_level * 100)
     stress_cvar = -returns_sim[returns_sim <= -stress_var].mean()
 
-    # === F.4 Asset Sensitivity ===
     sensitivity_results = []
     for i, t in enumerate(tickers):
         v = np.zeros(len(tickers))
@@ -71,7 +75,6 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
         impact = np.dot(weights, v)
         sensitivity_results.append({'Ticker': t, 'Portfolio Impact (%)': impact * 100})
 
-    # === F.5 Visualization ===
     st.subheader("F.1 – Stress Scenario Impact")
     df_hypo = pd.DataFrame(hypo_results)
     fig1, ax1 = plt.subplots(figsize=(8, 4), facecolor='#1e1e1e')
@@ -80,10 +83,8 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     ax1.set_title("Stress Scenario Portfolio Impact", color='white')
     ax1.tick_params(colors='white')
     ax1.set_facecolor('#1e1e1e')
-    for label in ax1.get_xticklabels():
-        label.set_color('white')
-    for label in ax1.get_yticklabels():
-        label.set_color('white')
+    for label in ax1.get_xticklabels(): label.set_color('white')
+    for label in ax1.get_yticklabels(): label.set_color('white')
     st.pyplot(fig1)
 
     st.subheader("F.4 – Asset Sensitivity (20% Drop)")
@@ -94,10 +95,8 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     ax2.set_title("Single-Asset Stress Test (20% Drop)", color='white')
     ax2.tick_params(colors='white')
     ax2.set_facecolor('#1e1e1e')
-    for label in ax2.get_xticklabels():
-        label.set_color('white')
-    for label in ax2.get_yticklabels():
-        label.set_color('white')
+    for label in ax2.get_xticklabels(): label.set_color('white')
+    for label in ax2.get_yticklabels(): label.set_color('white')
     st.pyplot(fig2)
 
     st.subheader("F.3 – Monte Carlo Stress Distribution")
@@ -112,7 +111,6 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     ax3.legend(facecolor='black', labelcolor='white')
     st.pyplot(fig3)
 
-    # === F.6 Summary Table ===
     summary = pd.DataFrame({
         'Type': ['Historical Shock', f'Monte Carlo VaR ({int(confidence_level*100)}%)', f'Monte Carlo CVaR ({int(confidence_level*100)}%)'],
         'Portfolio Drop (%)': [portfolio_drop_hist * 100, stress_var * 100, stress_cvar * 100],
