@@ -13,20 +13,29 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         st.error("⚠️ Risk-free or risky capital is missing.")
         return
 
-    try:
-        sizes = [capital_rf] + [[[capital_alloc[t] for t in tickers]
-    except KeyError as e:
-        st.error(f"⚠️ Missing allocation for ticker: {e}")
-        return
+    # Build sizes and labels safely
+    sizes = []
+    labels = []
 
-    labels = ['Risk-Free Asset'] + tickers
-    total = capital_rf + capital_risky
+    if capital_rf > 0:
+        sizes.append(capital_rf)
+        labels.append("Risk-Free Asset")
+
+    for t in tickers:
+        if t in capital_alloc:
+            sizes.append(capital_alloc[t])
+            labels.append(t)
+        else:
+            st.warning(f"⚠️ Ticker '{t}' missing in capital_alloc")
+
+    total = sum(sizes)
     if total == 0:
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
     percentages = [s / total * 100 for s in sizes]
 
+    # Visualization layout
     col1, col2 = st.columns([2, 1])
 
     with col1:
@@ -42,10 +51,8 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
             textprops={'color': 'white', 'fontsize': 10}
         )
 
-        for text in texts:
+        for text in texts + autotexts:
             text.set_color('white')
-        for autotext in autotexts:
-            autotext.set_color('white')
 
         ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
         fig.patch.set_facecolor('#1e1e1e')
