@@ -1,5 +1,3 @@
-# utils/block_i2_visualization.py
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -72,16 +70,17 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
         ax1.plot(cum_portfolio.index, cum_portfolio * 100, label='Portfolio', color='dodgerblue', linewidth=2)
         ax1.plot(cum_benchmark.index, cum_benchmark * 100, label=benchmark_symbol, color='crimson', linewidth=2)
 
-        ax1.set_title("Cumulative Return", color='white')
+        ax1.set_title("Cumulative Return (Normalized)", color='white', fontsize=12)
         ax1.set_ylabel("Cumulative Return (%)", color='white')
-        ax1.set_xlabel("Time", color='white')
+        ax1.set_xlabel("Date", color='white')
         ax1.legend(fontsize=8, facecolor='#1e1e1e', labelcolor='white')
         ax1.grid(False)
         ax1.tick_params(colors='white')
         ax1.set_facecolor('#1e1e1e')
+        fig1.patch.set_facecolor('#1e1e1e')
         st.pyplot(fig1)
 
-    # === Chart 2: Risk vs Return Bubble ===
+    # === Chart 2: Risk vs Return ===
     with col2:
         fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor='#1e1e1e')
 
@@ -114,12 +113,13 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
                 weight='bold'
             )
 
-        ax2.set_title("Risk vs Return (Annualized)", color='white')
+        ax2.set_title("Risk vs Return (Annualized)", color='white', fontsize=12)
         ax2.set_xlabel("Volatility (%)", color='white')
         ax2.set_ylabel("Return (%)", color='white')
         ax2.tick_params(colors='white')
         ax2.grid(False)
         ax2.set_facecolor('#1e1e1e')
+        fig2.patch.set_facecolor('#1e1e1e')
 
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
