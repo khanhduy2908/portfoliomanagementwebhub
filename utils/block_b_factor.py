@@ -8,12 +8,13 @@ import warnings
 import config
 from itertools import combinations
 
+# --- A. Compute Factors ---
 def compute_factors(data_stocks, returns_benchmark):
-    factor_data = []
+    results = []
     for ticker in data_stocks['Ticker'].unique():
         df = data_stocks[data_stocks['Ticker'] == ticker].copy().sort_values('time')
         if df.shape[0] < 6:
-            warnings.warn(f"{ticker}: Not enough data.")
+            warnings.warn(f"{ticker}: Insufficient data.")
             continue
 
         df['Return'] = df['Close'].pct_change() * 100
@@ -22,26 +23,22 @@ def compute_factors(data_stocks, returns_benchmark):
         df['Momentum'] = df['Close'].pct_change(periods=3) * 100
         df.dropna(inplace=True)
 
-        merged = pd.merge(df[['time', 'Return']], returns_benchmark[['Benchmark_Return']],
-                          left_on='time', right_index=True, how='inner')
+        merged = pd.merge(df[['time', 'Return']], returns_benchmark, left_on='time', right_index=True, how='inner')
         if len(merged) < 10:
-            warnings.warn(f"{ticker}: Insufficient data to compute beta.")
+            warnings.warn(f"{ticker}: Cannot compute Beta – insufficient benchmark data.")
             continue
 
-        X = merged[['Benchmark_Return']]
-        y = merged['Return']
-        model = LinearRegression().fit(X, y)
-        beta = model.coef_[0]
+        model = LinearRegression().fit(merged[['Benchmark_Return']], merged['Return'])
         df = df[df['time'].isin(merged['time'])]
-        df['Beta'] = beta
+        df['Beta'] = model.coef_[0]
+        results.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
 
-        factor_data.append(df[['time', 'Ticker', 'Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']])
+    if not results:
+        raise ValueError("No valid factor data computed.")
+    return pd.concat(results, ignore_index=True)
 
-    if not factor_data:
-        raise ValueError("No factors could be computed for any stock.")
-    return pd.concat(factor_data, ignore_index=True)
-
-def optimize_weights(latest_data):
+# --- B. Optimize Weights with Optuna ---
+def optimize_weights(df):
     def objective(trial):
         weights = np.array([
             trial.suggest_float('w_return', 0, 1),
@@ -50,62 +47,47 @@ def optimize_weights(latest_data):
             trial.suggest_float('w_mom', 0, 1),
             trial.suggest_float('w_beta', 0, 1)
         ])
-        if np.sum(weights) == 0:
+        if weights.sum() == 0:
             return -1e9
-        weights /= np.sum(weights)
+        weights /= weights.sum()
         score = (
-            weights[0] * latest_data['Return_S'] +
-            weights[2] * latest_data['Liquidity_S'] +
-            weights[3] * latest_data['Momentum_S'] -
-            weights[1] * latest_data['Volatility_S'] -
-            weights[4] * latest_data['Beta_S']
+            weights[0] * df['Return_S'] +
+            weights[2] * df['Liquidity_S'] +
+            weights[3] * df['Momentum_S'] -
+            weights[1] * df['Volatility_S'] -
+            weights[4] * df['Beta_S']
         )
-        latest_data['Score'] = score
-        return latest_data.nlargest(5, 'Score')['Return'].mean()
+        return df.assign(Score=score).nlargest(5, 'Score')['Return'].mean()
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=50)
     return study.best_params
 
-def run(data_stocks, returns_benchmark):
-    ranking_df = compute_factors(data_stocks, returns_benchmark)
-    latest_month = ranking_df['time'].max()
-    latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
-
-    if latest_data.shape[0] < 5:
-        raise ValueError("Insufficient number of stocks for selection in the latest month.")
-
-    factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
-    scaler = StandardScaler()
-    scaled_values = scaler.fit_transform(latest_data[factor_cols])
-    scaled_df = pd.DataFrame(scaled_values, columns=[f + '_S' for f in factor_cols])
-    latest_data = pd.concat([latest_data.reset_index(drop=True), scaled_df], axis=1)
-
-    w_opt = optimize_weights(latest_data)
-    config.factor_weights = w_opt
-
-    w_arr = np.array(list(w_opt.values()))
+# --- C. Apply Weights to Compute Score ---
+def apply_weights(df, weights_dict):
+    w_arr = np.array(list(weights_dict.values()))
     w_arr /= w_arr.sum()
-
-    latest_data['Score'] = (
-        w_arr[0] * latest_data['Return_S'] +
-        w_arr[2] * latest_data['Liquidity_S'] +
-        w_arr[3] * latest_data['Momentum_S'] -
-        w_arr[1] * latest_data['Volatility_S'] -
-        w_arr[4] * latest_data['Beta_S']
+    df['Score'] = (
+        w_arr[0] * df['Return_S'] +
+        w_arr[2] * df['Liquidity_S'] +
+        w_arr[3] * df['Momentum_S'] -
+        w_arr[1] * df['Volatility_S'] -
+        w_arr[4] * df['Beta_S']
     )
-    latest_data['Rank'] = latest_data['Score'].rank(ascending=False)
+    df['Rank'] = df['Score'].rank(ascending=False)
+    return df
 
-    strategy = getattr(config, 'factor_selection_strategy', 'top5_by_cluster')
+# --- D. Select Stocks based on Strategy ---
+def select_stocks(df, strategy):
+    features = ['Return_S', 'Volatility_S', 'Liquidity_S', 'Momentum_S', 'Beta_S']
+    if df.shape[0] < 3:
+        raise ValueError("Not enough stocks for selection.")
 
     if strategy == 'top5_by_cluster':
-        features = [f + '_S' for f in factor_cols]
-        if latest_data.shape[0] < 3:
-            raise ValueError("Not enough stocks for clustering.")
-        kmeans = KMeans(n_clusters=min(3, latest_data.shape[0]), n_init=10, random_state=42)
-        latest_data['Cluster'] = kmeans.fit_predict(latest_data[features])
+        kmeans = KMeans(n_clusters=min(3, df.shape[0]), n_init=10, random_state=42)
+        df['Cluster'] = kmeans.fit_predict(df[features])
         selected_df = (
-            latest_data.sort_values('Score', ascending=False)
+            df.sort_values('Score', ascending=False)
             .groupby('Cluster')
             .head(2)
             .sort_values('Rank')
@@ -113,19 +95,40 @@ def run(data_stocks, returns_benchmark):
             .reset_index(drop=True)
         )
     elif strategy == 'top5_overall':
-        selected_df = latest_data.sort_values('Score', ascending=False).head(5).reset_index(drop=True)
+        selected_df = df.sort_values('Score', ascending=False).head(5).reset_index(drop=True)
     elif strategy == 'strongest_clusters':
-        features = [f + '_S' for f in factor_cols]
-        if latest_data.shape[0] < 3:
-            raise ValueError("Not enough stocks for clustering.")
-        kmeans = KMeans(n_clusters=min(3, latest_data.shape[0]), n_init=10, random_state=42)
-        latest_data['Cluster'] = kmeans.fit_predict(latest_data[features])
-        cluster_strength = latest_data.groupby('Cluster')['Score'].mean().sort_values(ascending=False)
-        strongest_clusters = cluster_strength.head(2).index
-        selected_df = latest_data[latest_data['Cluster'].isin(strongest_clusters)]
-        selected_df = selected_df.sort_values('Score', ascending=False).head(5).reset_index(drop=True)
+        kmeans = KMeans(n_clusters=min(3, df.shape[0]), n_init=10, random_state=42)
+        df['Cluster'] = kmeans.fit_predict(df[features])
+        cluster_strength = df.groupby('Cluster')['Score'].mean().sort_values(ascending=False)
+        strongest = cluster_strength.head(2).index
+        selected_df = df[df['Cluster'].isin(strongest)].sort_values('Score', ascending=False).head(5).reset_index(drop=True)
     else:
-        raise ValueError(f"Unknown selection strategy: {strategy}")
+        raise ValueError(f"Unknown strategy: {strategy}")
+    return selected_df
+
+# --- E. Main Run ---
+def run(data_stocks, returns_benchmark):
+    ranking_df = compute_factors(data_stocks, returns_benchmark)
+    latest_month = ranking_df['time'].max()
+    latest_data = ranking_df[ranking_df['time'] == latest_month].copy()
+
+    if latest_data.shape[0] < 5:
+        raise ValueError("❌ Not enough stocks in latest month for selection.")
+
+    factor_cols = ['Return', 'Volatility', 'Liquidity', 'Momentum', 'Beta']
+    scaler = StandardScaler()
+    scaled = scaler.fit_transform(latest_data[factor_cols])
+    latest_data[[f + '_S' for f in factor_cols]] = scaled
+
+    # Optimize scoring weights
+    best_weights = optimize_weights(latest_data)
+    config.factor_weights = best_weights
+
+    latest_data = apply_weights(latest_data, best_weights)
+
+    # Select top stocks
+    strategy = getattr(config, 'factor_selection_strategy', 'top5_by_cluster')
+    selected_df = select_stocks(latest_data.copy(), strategy)
 
     selected_tickers = selected_df['Ticker'].tolist()
     selected_combinations = list(combinations(selected_tickers, 3))
