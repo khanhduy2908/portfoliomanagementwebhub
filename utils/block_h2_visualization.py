@@ -3,16 +3,19 @@ import streamlit as st
 import pandas as pd
 
 def run(capital_alloc, capital_rf, tickers):
+    # 1. Build full allocation breakdown
     labels = ['Risk-Free Asset'] + tickers
-    sizes = [capital_rf] + [capital_alloc[t] for t in tickers
-
-    if any(s < 0 for s in sizes):
-        st.warning("Cannot display pie chart due to negative capital allocation.")
-        return
-
+    capital_risky = [capital_alloc[t] for t in tickers]
+    sizes = [capital_rf] + capital_risky
     total = sum(sizes)
     percentages = [s / total * 100 for s in sizes]
 
+    # Early check
+    if total <= 0 or any(s < 0 for s in sizes):
+        st.warning("Unable to render pie chart due to invalid allocation.")
+        return
+
+    # 2. Pie Chart
     col1, col2 = st.columns([2, 1])
 
     with col1:
@@ -38,6 +41,7 @@ def run(capital_alloc, capital_rf, tickers):
         ax.set_facecolor('#1e1e1e')
         st.pyplot(fig)
 
+    # 3. Summary Table
     with col2:
         summary_df = pd.DataFrame({
             "Asset": labels,
@@ -52,4 +56,4 @@ def run(capital_alloc, capital_rf, tickers):
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
         st.markdown("**Capital Breakdown**")
-        st.dataframe(summary_df, use_container_width=True, height=260)
+        st.dataframe(summary_df, use_container_width=True, height=270)
