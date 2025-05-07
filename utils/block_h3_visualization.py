@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
-        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers):
+        mu_p, cov, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, weights):
 
     st.markdown("### HRP vs Benchmark and Efficient Frontier with CAL")
 
@@ -40,7 +40,6 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
     st.markdown("#### Efficient Frontier and Capital Allocation Line (CAL)")
     fig2, ax2 = plt.subplots(figsize=(10, 5), facecolor='black')
 
-    # Ensure all inputs are NumPy arrays
     mu_list = np.array(results_ef[0])
     sigma_list = np.array(results_ef[1])
     sharpe_list = np.array(results_ef[2])
@@ -48,11 +47,13 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
     scatter = ax2.scatter(sigma_list, mu_list, c=sharpe_list, cmap='viridis', alpha=0.6, label='Portfolios')
     plt.colorbar(scatter, ax=ax2, label='Sharpe Ratio')
 
+    sigma_p = np.sqrt(weights.T @ cov @ weights)
+
     ax2.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=200,
                 label=f'Optimal Risky Portfolio ({best_portfolio["Portfolio"]})')
     ax2.scatter(0, rf * 100, c='white', marker='o', s=100, label=f'Risk-Free Rate ({rf * 100:.2f}%)')
 
-    slope = (mu_p - rf) / sigma_p
+    slope = (mu_p - rf) / sigma_p if sigma_p > 0 else 0
     x_cal = np.linspace(0, max(sigma_list) * 1.5, 100)
     y_cal = rf * 100 + slope * x_cal
     ax2.plot(x_cal, y_cal, 'r--', label='Capital Allocation Line (CAL)')
@@ -77,5 +78,4 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
 
     st.markdown("#### Portfolio Tickers")
     st.write(f"Selected tickers: {', '.join(tickers)}")
-
     st.pyplot(fig2)
