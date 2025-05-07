@@ -10,11 +10,14 @@ def run(capital_alloc, capital_rf, tickers):
         st.warning("Cannot display pie chart due to negative capital allocation.")
         return
 
+    total = sum(sizes)
+    percentages = [s / total * 100 for s in sizes]
+
     col1, col2 = st.columns([2, 1])
 
     with col1:
         fig, ax = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
-        colors = plt.cm.Pastel1.colors[:len(labels)]
+        colors = plt.cm.Set3.colors[:len(labels)]
 
         wedges, texts, autotexts = ax.pie(
             sizes,
@@ -22,7 +25,7 @@ def run(capital_alloc, capital_rf, tickers):
             autopct='%1.1f%%',
             startangle=90,
             colors=colors,
-            textprops={'color': 'white', 'fontsize': 9}
+            textprops={'color': 'white', 'fontsize': 10}
         )
 
         for text in texts:
@@ -30,7 +33,7 @@ def run(capital_alloc, capital_rf, tickers):
         for autotext in autotexts:
             autotext.set_color('white')
 
-        ax.set_title("Asset Allocation Overview", fontsize=12, color='white')
+        ax.set_title("Complete Portfolio Allocation (Risk-Free & Risky Assets)", fontsize=12, color='white')
         fig.patch.set_facecolor('#1e1e1e')
         ax.set_facecolor('#1e1e1e')
         st.pyplot(fig)
@@ -38,7 +41,15 @@ def run(capital_alloc, capital_rf, tickers):
     with col2:
         summary_df = pd.DataFrame({
             "Asset": labels,
-            "Capital (VND)": [f"{v:,.0f}" for v in sizes]
+            "Capital (VND)": [f"{v:,.0f}" for v in sizes],
+            "Allocation (%)": [f"{p:.1f}%" for p in percentages]
         })
+        total_row = pd.DataFrame([{
+            "Asset": "Total",
+            "Capital (VND)": f"{total:,.0f}",
+            "Allocation (%)": "100.0%"
+        }])
+        summary_df = pd.concat([summary_df, total_row], ignore_index=True)
+
         st.markdown("**Capital Breakdown**")
-        st.dataframe(summary_df, use_container_width=True, height=220)
+        st.dataframe(summary_df, use_container_width=True, height=260)
