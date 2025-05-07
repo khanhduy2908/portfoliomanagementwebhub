@@ -119,7 +119,6 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
         'Generated At': datetime.now().strftime('%Y-%m-%d %H:%M')
     })
 
-    st.markdown("<br><hr><br>", unsafe_allow_html=True)
     st.dataframe(summary.round(2), use_container_width=True)
 
     return summary
