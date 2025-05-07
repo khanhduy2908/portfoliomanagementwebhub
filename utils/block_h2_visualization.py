@@ -4,7 +4,7 @@ import pandas as pd
 
 def run(capital_alloc, capital_rf, tickers):
     labels = ['Risk-Free Asset'] + tickers
-    sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
+    sizes = [capital_rf] + [capital_alloc[t] for t in tickers
 
     if any(s < 0 for s in sizes):
         st.warning("Cannot display pie chart due to negative capital allocation.")
