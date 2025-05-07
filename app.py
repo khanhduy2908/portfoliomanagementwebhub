@@ -1,3 +1,5 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -42,14 +44,16 @@ def get_risk_profile_description(score):
     else:
         return "Undefined"
 
+# Load valid tickers
 with open("utils/valid_tickers.txt", "r") as f:
     valid_tickers = sorted([line.strip() for line in f if line.strip()])
 
+# Streamlit page setup
 st.set_page_config(page_title="Portfolio Optimization Platform", layout="wide")
 st.title("Institutional Portfolio Optimization Platform")
-
 st.sidebar.header("Configuration")
 
+# Sidebar inputs
 default_tickers = [x for x in ["VNM", "FPT", "MWG", "REE", "VCB"] if x in valid_tickers]
 tickers_user = st.sidebar.multiselect("Stock Tickers", options=valid_tickers, default=default_tickers)
 
@@ -72,6 +76,7 @@ strategy_options = {
 selection_strategy = st.sidebar.selectbox("Factor Selection Strategy", list(strategy_options.keys()))
 run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
+# Assign config
 config.tickers = tickers_user
 config.benchmark_symbol = benchmark_user
 config.start_date = pd.to_datetime(start_user)
@@ -82,11 +87,15 @@ config.total_capital = capital_user
 config.A = map_risk_score_to_A(risk_score_user)
 config.risk_score = risk_score_user
 config.factor_selection_strategy = strategy_options[selection_strategy]
+config.y_min = 0.6
+config.y_max = 0.9
 
+# Early exit
 if not config.tickers or config.benchmark_symbol is None:
     st.error("Please select at least one stock ticker and a benchmark.")
     st.stop()
 
+# Run full pipeline
 if run_analysis:
     with st.spinner("Executing portfolio optimization pipeline..."):
         try:
@@ -117,11 +126,16 @@ if run_analysis:
             st.success("G – HRP + CVaR Optimization Done")
 
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, sigma_p, mu, y_opt, mu_p, cov = block_h_complete_portfolio.run(
-                hrp_result_dict, adj_returns_combinations, cov_matrix_dict, config.rf, config.A, config.total_capital, config.risk_score, y_min=config.y_min, y_max=config.y_max
+                hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
+                config.rf, config.A, config.total_capital, config.risk_score,
+                y_min=config.y_min, y_max=config.y_max
             )
             st.success("H – Optimal Portfolio Constructed")
 
-            alloc_df = pd.DataFrame({"Ticker": list(capital_alloc.keys()), "Allocated Capital (VND)": list(capital_alloc.values())})
+            alloc_df = pd.DataFrame({
+                "Ticker": list(capital_alloc.keys()),
+                "Allocated Capital (VND)": list(capital_alloc.values())
+            })
             block_h1_visualization.display_portfolio_info(portfolio_info, alloc_df)
             st.success("H1 – Portfolio Summary Displayed")
 
