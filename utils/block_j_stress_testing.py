@@ -105,7 +105,8 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     ax3.tick_params(colors='white')
     ax3.set_facecolor('#1e1e1e')
     ax3.legend(facecolor='black', labelcolor='white')
-
+    
+    st.markdown("### Stress Testing Overview")
     col1, col2, col3 = st.columns(3)
     with col1: st.pyplot(fig1, clear_figure=True)
     with col2: st.pyplot(fig2, clear_figure=True)
@@ -118,7 +119,10 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
         'Generated At': datetime.now().strftime('%Y-%m-%d %H:%M')
     })
 
-    st.subheader("F.6 – Stress Testing Summary")
+    st.markdown("<br><hr><br>", unsafe_allow_html=True)
     st.dataframe(summary.round(2), use_container_width=True)
+
+    return summary
+
 
     return summary
