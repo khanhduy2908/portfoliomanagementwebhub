@@ -8,20 +8,20 @@ import config
 
 from utils import (
     block_a_data,
-    block_b_factor,
-    block_c_covariance,
-    block_d_forecast,
-    block_e_feasibility,
-    block_f_backtest,
-    block_g_optimization,
-    block_h_complete_portfolio,
-    block_h1_visualization,
-    block_h2_visualization,
-    block_h3_visualization,
-    block_i_performance_analysis,
-    block_i1_visualization,
-    block_i2_visualization,
-    block_j_stress_testing
+    #block_b_factor,
+    #block_c_covariance,
+    #block_d_forecast,
+    #block_e_feasibility,
+    #block_f_backtest,
+    #block_g_optimization,
+    #block_h_complete_portfolio,
+    #block_h1_visualization,
+    #block_h2_visualization,
+    #block_h3_visualization,
+    #block_i_performance_analysis,
+    #block_i1_visualization,
+    #block_i2_visualization,
+    #block_j_stress_testing
 )
 
 def map_risk_score_to_A(score):
