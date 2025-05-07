@@ -94,7 +94,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     ax1.set_ylabel("Index Level", color='white')
     ax1.tick_params(colors='white')
     ax1.legend(facecolor='#1e1e1e', labelcolor='white')
-    ax1.grid(True, alpha=0.3)
+    ax1.grid(False)
     st.pyplot(fig1)
 
     col1, col2 = st.columns(2)
@@ -106,7 +106,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         ax2.set_title("Portfolio Drawdown", color='white')
         ax2.set_ylabel("Drawdown", color='white')
         ax2.tick_params(colors='white')
-        ax2.grid(True, alpha=0.3)
+        ax2.grid(False)
         st.pyplot(fig2)
 
     with col2:
@@ -117,7 +117,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
             ax3.axhline(0, linestyle='--', color='white', alpha=0.4)
             ax3.set_title("Rolling Sharpe Ratio", color='white')
             ax3.tick_params(colors='white')
-            ax3.grid(True, alpha=0.3)
+            ax3.grid(False)
             st.pyplot(fig3)
         else:
             st.warning("Not enough data for rolling Sharpe ratio.")
