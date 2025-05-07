@@ -6,6 +6,7 @@ from pytorch_tabnet.tab_model import TabNetRegressor
 from collections import defaultdict
 import joblib
 import os
+import warnings
 
 def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=100, n_splits=5):
     eval_logs = []
@@ -20,27 +21,31 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
         for ticker in tickers:
             df_ticker = df_combo[df_combo['Ticker'] == ticker].sort_values('time')
             for i in range(lookback, len(df_ticker)):
-                window = df_ticker[factor_cols].iloc[i - lookback:i].values.flatten()
+                row = df_ticker[factor_cols].iloc[i - lookback:i].values.flatten()
                 target = df_ticker['Return_Close'].iloc[i]
                 ts = df_ticker['time'].iloc[i]
-                X_all.append(window)
+                X_all.append(row)
                 y_all.append(target)
                 meta.append({'time': ts, 'ticker': ticker})
+
+        if len(X_all) < min_samples:
+            warnings.warn(f"{combo}: Not enough samples ({len(X_all)}). Skipping.")
+            continue
 
         X_all = np.array(X_all)
         y_all = np.array(y_all)
         meta_df = pd.DataFrame(meta)
 
-        if len(X_all) < min_samples:
-            print(f"⚠️ {combo}: Not enough samples ({len(X_all)}). Skipping.")
-            continue
-
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X_all)
 
-        split_size = int(len(X_scaled) / (n_splits + 1))
+        split_size = len(X_scaled) // (n_splits + 1)
+        if split_size < 10:
+            warnings.warn(f"{combo}: Not enough data for walkforward splits. Skipping.")
+            continue
+
         maes, r2s, accs, dir_accs = [], [], [], []
-        preds_all, y_all_vals, tickers_all = [], [], []
+        preds_all, y_true_all, tickers_all = [], [], []
 
         for i in range(n_splits):
             train_end = (i + 1) * split_size
@@ -53,7 +58,7 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
             y_test = y_all[train_end:test_end].reshape(-1, 1)
             test_meta = meta_df.iloc[train_end:test_end]
 
-            if len(X_test) == 0:
+            if X_test.shape[0] == 0:
                 continue
 
             model = TabNetRegressor(seed=42)
@@ -68,18 +73,13 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
             preds = model.predict(X_test).squeeze()
             y_true = y_test.squeeze()
 
-            mae = mean_absolute_error(y_true, preds)
-            r2 = r2_score(y_true, preds)
-            acc = (np.sign(y_true) == np.sign(preds)).mean()
-            dir_acc = ((preds * y_true) > 0).mean()
-
-            maes.append(mae)
-            r2s.append(r2)
-            accs.append(acc)
-            dir_accs.append(dir_acc)
+            maes.append(mean_absolute_error(y_true, preds))
+            r2s.append(r2_score(y_true, preds))
+            accs.append((np.sign(y_true) == np.sign(preds)).mean())
+            dir_accs.append(((preds * y_true) > 0).mean())
 
             preds_all.extend(preds)
-            y_all_vals.extend(y_true)
+            y_true_all.extend(y_true)
             tickers_all.extend(test_meta['ticker'].values)
 
             # Save model
@@ -88,7 +88,7 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
             joblib.dump(model, f"saved_models/model_{fname}_fold{i}.pkl")
 
         if not maes:
-            print(f"⚠️ {combo}: No valid folds. Skipping.")
+            warnings.warn(f"{combo}: No valid folds evaluated. Skipping.")
             continue
 
         walkforward_results.append({
@@ -101,12 +101,12 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
 
         error_df = pd.DataFrame({
             'Ticker': tickers_all,
-            'True': y_all_vals,
+            'True': y_true_all,
             'Pred': preds_all
         })
         error_df['Error'] = np.abs(error_df['True'] - error_df['Pred'])
-        stock_error = error_df.groupby('Ticker')['Error'].mean().sort_values(ascending=False)
-        error_by_stock[combo] = stock_error
+        stock_errors = error_df.groupby('Ticker')['Error'].mean().sort_values(ascending=False)
+        error_by_stock[combo] = stock_errors
 
     if walkforward_results:
         walkforward_df = pd.DataFrame(walkforward_results).sort_values('MAE')
@@ -118,6 +118,6 @@ def run(valid_combinations, features_df, factor_cols, lookback=12, min_samples=1
         print(error_by_stock[tuple(best_combo.split("-"))].round(4))
     else:
         walkforward_df = pd.DataFrame()
-        print("⚠️ No valid portfolios evaluated in Block F.")
+        print("⚠️ No portfolios successfully evaluated in Block F.")
 
     return walkforward_df, error_by_stock
