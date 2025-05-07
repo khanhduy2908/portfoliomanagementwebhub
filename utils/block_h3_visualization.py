@@ -7,7 +7,9 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
 
     st.markdown("### Efficient Frontier and Capital Allocation Line (CAL)")
 
-    fig, ax = plt.subplots(figsize=(10, 7), facecolor='#121212')
+    if sigma_p == 0:
+        st.error("⚠️ Portfolio volatility is zero. Cannot draw CAL.")
+        return
 
     mu_list = np.array(results_ef[0])
     sigma_list = np.array(results_ef[1])
@@ -16,6 +18,8 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
     if len(mu_list) == 0 or len(sigma_list) == 0:
         st.warning("No data available to plot the efficient frontier.")
         return
+
+    fig, ax = plt.subplots(figsize=(10, 7), facecolor='#121212')
 
     # Efficient Frontier Scatter
     scatter = ax.scatter(
@@ -27,22 +31,23 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
     cbar.ax.yaxis.set_tick_params(color='white')
     plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
 
-    # Risk-Free Rate
+    # Plot Risk-Free Rate
     ax.scatter(0, rf * 100, c='blue', s=80, marker='o', label=f"Risk-Free Rate ({rf*100:.2f}%)")
 
-    # Optimal Risky Portfolio
+    # Plot Optimal Risky Portfolio
     ax.scatter(sigma_p * 100, mu_p * 100, c='red', s=150, marker='*', label="Optimal Risky Portfolio")
 
     # CAL Line
     cal_x = np.linspace(0, max(sigma_list) * 1.4, 100)
-    cal_y = rf + ((mu_p - rf) / sigma_p) * cal_x
+    slope = (mu_p - rf) / sigma_p
+    cal_y = rf + slope * cal_x
     ax.plot(cal_x * 100, cal_y * 100, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
 
-    # Optimal Complete Portfolio
+    # Plot Optimal Complete Portfolio
     ax.scatter(sigma_c * 100, expected_rc * 100, c='lime', s=120, marker='D',
                label=f"Optimal Complete Portfolio (y={y_capped:.2f})")
 
-    # Aesthetic Settings
+    # Aesthetic
     ax.set_facecolor('#121212')
     fig.patch.set_facecolor('#121212')
     ax.set_title("Efficient Frontier with Optimal Complete Portfolio", fontsize=14, color='white')
