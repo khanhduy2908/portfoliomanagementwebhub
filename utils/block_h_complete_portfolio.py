@@ -78,7 +78,8 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         'sigma_c': sigma_c,
         'utility': utility,
         'capital_risky': capital_risky,
-        'capital_rf': capital_rf
+        'capital_rf': capital_rf,
+        'risk_score': risk_score
     }
 
     return (
