@@ -15,11 +15,19 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
     df_price = data_stocks[data_stocks['Ticker'].isin(tickers_portfolio)].copy()
     df_benchmark = data_benchmark[data_benchmark['Ticker'] == benchmark_symbol].copy()
 
+    if df_price.empty or df_benchmark.empty:
+        st.warning("Missing price data for portfolio or benchmark.")
+        return
+
     df_price['time'] = pd.to_datetime(df_price['time'], errors='coerce')
     df_benchmark['time'] = pd.to_datetime(df_benchmark['time'], errors='coerce')
 
     df_prices = df_price.pivot(index='time', columns='Ticker', values='Close').sort_index()
     df_benchmark = df_benchmark.pivot(index='time', columns='Ticker', values='Close').sort_index()
+
+    if benchmark_symbol not in df_benchmark.columns:
+        st.warning("Benchmark symbol data not found.")
+        return
     df_benchmark = df_benchmark[[benchmark_symbol]]
 
     common_dates = df_prices.index.intersection(df_benchmark.index)
@@ -31,15 +39,24 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
     df_benchmark = df_benchmark.loc[common_dates]
 
     # STEP 2: Compute returns
-    portfolio_returns = df_prices.pct_change().dropna() @ weights
+    try:
+        portfolio_returns = df_prices.pct_change().dropna().values @ weights
+    except Exception as e:
+        st.error(f"Portfolio return computation failed: {str(e)}")
+        return
+
     benchmark_returns = df_benchmark[benchmark_symbol].pct_change().dropna()
+
+    if len(portfolio_returns) == 0 or benchmark_returns.empty:
+        st.warning("Insufficient return data.")
+        return
 
     cum_portfolio = (1 + portfolio_returns).cumprod()
     cum_benchmark = (1 + benchmark_returns).cumprod()
 
     # STEP 3: Annualized metrics
-    mean_p, mean_b = portfolio_returns.mean() * 12, benchmark_returns.mean() * 12
-    vol_p, vol_b = portfolio_returns.std() * np.sqrt(12), benchmark_returns.std() * np.sqrt(12)
+    mean_p, mean_b = np.mean(portfolio_returns) * 12, benchmark_returns.mean() * 12
+    vol_p, vol_b = np.std(portfolio_returns) * np.sqrt(12), benchmark_returns.std() * np.sqrt(12)
     sharpe_p = (mean_p - rf * 12) / vol_p if vol_p > 0 else np.nan
     sharpe_b = (mean_b - rf * 12) / vol_b if vol_b > 0 else np.nan
 
