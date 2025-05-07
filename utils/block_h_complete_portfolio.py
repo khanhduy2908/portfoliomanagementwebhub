@@ -29,8 +29,8 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = np.dot(weights, mu)
 
-    # --- Set max risk-free allocation constraint based on user profile ---
-    score = config.risk_score_user if hasattr(config, 'risk_score_user') else 25
+    # --- Risk profile constraints ---
+    score = getattr(config, 'risk_score', 25)
     if 10 <= score <= 17:
         max_rf_ratio = 0.85
     elif 18 <= score <= 27:
@@ -38,9 +38,9 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     elif 28 <= score <= 40:
         max_rf_ratio = 0.2
     else:
-        max_rf_ratio = 0.5  # default fallback
+        max_rf_ratio = 0.5  # fallback
 
-    # --- Utility-Constrained Allocation Optimization ---
+    # --- Utility Optimization (bounded by max_rf_ratio) ---
     def utility_neg(y):
         expected_rc = y * mu_p + (1 - y) * rf
         sigma_c = y * sigma_p
@@ -52,6 +52,7 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
 
     y_opt = opt_result.x
     y_capped = np.clip(y_opt, config.y_min, config.y_max)
+
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c ** 2
@@ -77,5 +78,5 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     }
 
     return (best_portfolio, y_capped, capital_alloc,
-        sigma_c, expected_rc, weights, tickers,
-        portfolio_info, sigma_p, mu, y_opt, mu_p)
+            sigma_c, expected_rc, weights, tickers,
+            portfolio_info, sigma_p, mu, y_opt, mu_p, cov)
