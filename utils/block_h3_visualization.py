@@ -1,60 +1,63 @@
-import streamlit as st
 import matplotlib.pyplot as plt
-import numpy as np
+import streamlit as st
+import pandas as pd
 
-def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
-        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, cov):
-
-    st.markdown("### Efficient Frontier and Capital Allocation Line (CAL)")
-
-    if sigma_p == 0:
-        st.error("⚠️ Portfolio volatility is zero. Cannot draw CAL.")
+def run(capital_alloc, capital_rf, capital_risky, tickers):
+    if not capital_alloc or not tickers or capital_rf is None or capital_risky is None:
+        st.error("⚠️ Missing capital allocation inputs.")
         return
 
-    mu_list = np.array(results_ef[0])
-    sigma_list = np.array(results_ef[1])
-    sharpe_list = np.array(results_ef[2])
-
-    if len(mu_list) == 0 or len(sigma_list) == 0:
-        st.warning("No data available to plot the efficient frontier.")
+    try:
+        sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
+    except KeyError as e:
+        st.error(f"⚠️ Missing allocation for ticker: {e}")
         return
 
-    fig, ax = plt.subplots(figsize=(10, 7), facecolor='#121212')
+    labels = ['Risk-Free Asset'] + tickers
+    total = capital_rf + capital_risky
+    if total == 0:
+        st.error("⚠️ Total capital is zero. Cannot compute allocation.")
+        return
 
-    # Efficient Frontier Scatter
-    scatter = ax.scatter(
-        sigma_list * 100, mu_list * 100, c=sharpe_list,
-        cmap='viridis', s=25, alpha=0.9, edgecolors='k', linewidths=0.4
-    )
-    cbar = plt.colorbar(scatter, ax=ax)
-    cbar.set_label("Sharpe Ratio", color='white')
-    cbar.ax.yaxis.set_tick_params(color='white')
-    plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+    percentages = [s / total * 100 for s in sizes]
 
-    # Plot Risk-Free Rate
-    ax.scatter(0, rf * 100, c='blue', s=80, marker='o', label=f"Risk-Free Rate ({rf*100:.2f}%)")
+    col1, col2 = st.columns([2, 1])
 
-    # Plot Optimal Risky Portfolio
-    ax.scatter(sigma_p * 100, mu_p * 100, c='red', s=150, marker='*', label="Optimal Risky Portfolio")
+    with col1:
+        fig, ax = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
+        colors = plt.cm.Set3.colors[:len(labels)]
 
-    # CAL Line
-    cal_x = np.linspace(0, max(sigma_list) * 1.4, 100)
-    slope = (mu_p - rf) / sigma_p
-    cal_y = rf + slope * cal_x
-    ax.plot(cal_x * 100, cal_y * 100, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
+        wedges, texts, autotexts = ax.pie(
+            sizes,
+            labels=labels,
+            autopct='%1.1f%%',
+            startangle=90,
+            colors=colors,
+            textprops={'color': 'white', 'fontsize': 10}
+        )
 
-    # Plot Optimal Complete Portfolio
-    ax.scatter(sigma_c * 100, expected_rc * 100, c='lime', s=120, marker='D',
-               label=f"Optimal Complete Portfolio (y={y_capped:.2f})")
+        for text in texts:
+            text.set_color('white')
+        for autotext in autotexts:
+            autotext.set_color('white')
 
-    # Aesthetic
-    ax.set_facecolor('#121212')
-    fig.patch.set_facecolor('#121212')
-    ax.set_title("Efficient Frontier with Optimal Complete Portfolio", fontsize=14, color='white')
-    ax.set_xlabel("Portfolio Volatility (%)", color='white')
-    ax.set_ylabel("Expected Return (%)", color='white')
-    ax.tick_params(colors='white')
-    ax.legend(facecolor='#1e1e1e', labelcolor='white', fontsize=9, loc='upper left', frameon=True)
-    ax.grid(False)
+        ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
+        fig.patch.set_facecolor('#1e1e1e')
+        ax.set_facecolor('#1e1e1e')
+        st.pyplot(fig)
 
-    st.pyplot(fig)
+    with col2:
+        summary_df = pd.DataFrame({
+            "Asset": labels,
+            "Capital (VND)": [f"{v:,.0f}" for v in sizes],
+            "Allocation (%)": [f"{p:.1f}%" for p in percentages]
+        })
+        total_row = pd.DataFrame([{
+            "Asset": "Total",
+            "Capital (VND)": f"{total:,.0f}",
+            "Allocation (%)": "100.0%"
+        }])
+        summary_df = pd.concat([summary_df, total_row], ignore_index=True)
+
+        st.markdown("**Capital Breakdown**")
+        st.dataframe(summary_df, use_container_width=True, height=260)
