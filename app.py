@@ -1,11 +1,8 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
 import config
-
 from utils import (
     block_a_data,
     block_b_factor,
@@ -24,6 +21,7 @@ from utils import (
     block_j_stress_testing
 )
 
+# --- Helper functions ---
 def map_risk_score_to_A(score):
     if 10 <= score <= 17:
         return 30
@@ -44,16 +42,16 @@ def get_risk_profile_description(score):
     else:
         return "Undefined"
 
-# Load valid tickers
+# --- Load valid tickers ---
 with open("utils/valid_tickers.txt", "r") as f:
     valid_tickers = sorted([line.strip() for line in f if line.strip()])
 
-# Page config
+# --- Page config ---
 st.set_page_config(page_title="Portfolio Optimization Platform", layout="wide")
 st.title("Institutional Portfolio Optimization Platform")
 st.sidebar.header("Configuration")
 
-# Sidebar input
+# --- Sidebar inputs ---
 default_tickers = [x for x in ["VNM", "FPT", "MWG", "REE", "VCB"] if x in valid_tickers]
 tickers_user = st.sidebar.multiselect("Stock Tickers", options=valid_tickers, default=default_tickers)
 
@@ -76,7 +74,7 @@ strategy_options = {
 selection_strategy = st.sidebar.selectbox("Factor Selection Strategy", list(strategy_options.keys()))
 run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
-# Assign to config
+# --- Assign to config ---
 config.tickers = tickers_user
 config.benchmark_symbol = benchmark_user
 config.start_date = pd.to_datetime(start_user)
@@ -90,11 +88,12 @@ config.factor_selection_strategy = strategy_options[selection_strategy]
 config.y_min = 0.6
 config.y_max = 0.9
 
+# --- Input Validation ---
 if not config.tickers or config.benchmark_symbol is None:
     st.error("Please select at least one stock ticker and a benchmark.")
     st.stop()
 
-# Pipeline
+# --- Pipeline ---
 if run_analysis:
     with st.spinner("Executing portfolio optimization pipeline..."):
         try:
