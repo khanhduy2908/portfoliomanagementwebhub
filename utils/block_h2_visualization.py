@@ -14,7 +14,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         return
 
     try:
-        sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
+        sizes = [[capital_rf] + [capital_alloc[t] for t in tickers]
     except KeyError as e:
         st.error(f"⚠️ Missing allocation for ticker: {e}")
         return
