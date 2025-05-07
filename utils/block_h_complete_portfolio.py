@@ -1,59 +1,77 @@
+# utils/block_h_complete_portfolio.py
 
 import numpy as np
-import cvxpy as cp
+import config
+from scipy.optimize import minimize_scalar
 
-def run(hrp_cvar_results, adj_returns_combinations, cov_matrix_dict, rf, A, total_capital, risk_score=None):
-    if not hrp_cvar_results:
+def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
+        rf, A, total_capital):
+
+    if not hrp_result_dict:
         raise ValueError("No valid HRP-CVaR results from Block G.")
 
-    best_key = max(hrp_cvar_results, key=lambda k: hrp_cvar_results[k]['Sharpe Ratio'])
-    best_portfolio = hrp_cvar_results[best_key]
+    best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
+    best_portfolio = hrp_result_dict[best_key]
     tickers = list(best_portfolio['Weights'].keys())
-    weights_hrp = np.array(list(best_portfolio['Weights'].values()))
-    portfolio_name = best_key
+    weights = np.array([best_portfolio['Weights'][t] for t in tickers])
+    weights = weights / weights.sum()  # ensure weights are normalized
 
-    mu = np.array([adj_returns_combinations[portfolio_name][t] for t in tickers]) / 100
-    cov = cov_matrix_dict[portfolio_name]
+    # Portfolio metadata
+    portfolio_name = '-'.join(best_key) if isinstance(best_key, tuple) else str(best_key)
 
-    # === Find optimal y* ===
-    sigma_p = np.sqrt(weights_hrp.T @ cov @ weights_hrp)
-    mu_p = weights_hrp @ mu
-    y_opt = (mu_p - rf) / (A * sigma_p ** 2)
+    # Expected returns and covariance
+    mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
+    cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
 
-    # === Apply capped exposure based on risk tolerance ===
-    if risk_score is None:
-        max_rf_ratio = 0.25
-    elif risk_score <= 17:
+    sigma_p = np.sqrt(weights.T @ cov @ weights)
+    mu_p = weights @ mu
+
+    # Risk-free allocation constraint based on user's risk score
+    score = getattr(config, 'risk_score', 25)
+    if 10 <= score <= 17:
         max_rf_ratio = 0.40
-    elif risk_score <= 27:
-        max_rf_ratio = 0.25
-    else:
+    elif 18 <= score <= 27:
+        max_rf_ratio = 0.20
+    elif 28 <= score <= 40:
         max_rf_ratio = 0.10
+    else:
+        max_rf_ratio = 0.00
 
-    y_capped = min(y_opt, 1 - max_rf_ratio)
+    def utility_neg(y):
+        expected_rc = y * mu_p + (1 - y) * rf
+        sigma_c = y * sigma_p
+        return -(expected_rc - 0.5 * A * sigma_c**2)
 
-    capital_risky = total_capital * y_capped
+    bounds = (0, 1 - max_rf_ratio)
+    result = minimize_scalar(utility_neg, bounds=bounds, method='bounded')
+    y_opt = result.x
+    y_capped = np.clip(y_opt, config.y_min, config.y_max)
+
+    expected_rc = y_capped * mu_p + (1 - y_capped) * rf
+    sigma_c = y_capped * sigma_p
+    utility = expected_rc - 0.5 * A * sigma_c**2
+
+    capital_risky = y_capped * total_capital
     capital_rf = total_capital - capital_risky
-
-    capital_alloc = {t: w * capital_risky for t, w in zip(tickers, weights_hrp)}
-
-    expected_rc = mu_p * y_capped + rf * (1 - y_capped)
-    sigma_c = sigma_p * y_capped
-    utility = expected_rc - 0.5 * A * sigma_c ** 2
+    capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
     portfolio_info = {
-        "portfolio_name": portfolio_name,
-        "mu_p": mu_p,
-        "sigma_p": sigma_p,
-        "rf": rf,
-        "y_opt": y_opt,
-        "y_capped": y_capped,
-        "A": A,
-        "expected_rc": expected_rc,
-        "sigma_c": sigma_c,
-        "utility": utility,
-        "capital_rf": capital_rf,
-        "capital_risky": capital_risky
+        'portfolio_name': portfolio_name,
+        'mu': mu_p,
+        'sigma': sigma_p,
+        'rf': rf,
+        'y_opt': y_opt,
+        'y_capped': y_capped,
+        'A': A,
+        'expected_rc': expected_rc,
+        'sigma_c': sigma_c,
+        'utility': utility,
+        'capital_risky': capital_risky,
+        'capital_rf': capital_rf
     }
 
-    return best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights_hrp, tickers, portfolio_info, sigma_p, mu, y_opt, mu_p, cov
+    return (
+        best_portfolio, y_capped, capital_alloc,
+        sigma_c, expected_rc, weights, tickers,
+        portfolio_info, sigma_p, mu, y_opt, mu_p, cov
+    )
