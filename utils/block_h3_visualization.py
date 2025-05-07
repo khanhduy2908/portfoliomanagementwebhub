@@ -5,12 +5,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
-        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, cov):
+        mu_p, cov, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, weights):
 
-    st.markdown("### HRP vs Benchmark and Efficient Frontier with CAL")
+    st.markdown("### Efficient Frontier with Optimal Complete Portfolio")
 
-    # --- HRP vs Benchmark (Bar Chart) ---
-    st.markdown("#### HRP Portfolios vs Benchmark")
+    # --- HRP Portfolio Bar Chart ---
     combos = list(hrp_result_dict.keys())[:5]
     returns, vols, cvars, labels = [], [], [], []
 
@@ -29,14 +28,12 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
 
     x = np.arange(len(labels))
     width = 0.25
-
     fig1, ax1 = plt.subplots(figsize=(10, 5), facecolor='black')
     ax1.bar(x - width, returns, width, label='Return (%)', color='skyblue')
     ax1.bar(x, vols, width, label='Volatility (%)', color='orange')
     ax1.bar(x + width, cvars, width, label='CVaR (%)', color='salmon')
     ax1.axhline(benchmark_return_mean * 100, color='lime', linestyle='--', linewidth=2,
                 label=f"Benchmark Return ({benchmark_return_mean * 100:.2f}%)")
-
     ax1.set_xticks(x)
     ax1.set_xticklabels(labels, rotation=45)
     ax1.set_facecolor('black')
@@ -47,10 +44,7 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
     ax1.legend(facecolor='black', labelcolor='white')
     st.pyplot(fig1)
 
-    # --- Efficient Frontier + CAL (Scatter Plot) ---
-    st.markdown("#### Efficient Frontier and Capital Allocation Line (CAL)")
-    fig2, ax2 = plt.subplots(figsize=(10, 5), facecolor='black')
-
+    # --- Efficient Frontier ---
     mu_list = np.array(results_ef[0])
     sigma_list = np.array(results_ef[1])
     sharpe_list = np.array(results_ef[2])
@@ -59,43 +53,31 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
         st.warning("Insufficient data for efficient frontier.")
         return
 
-    scatter = ax2.scatter(sigma_list, mu_list, c=sharpe_list, cmap='viridis', alpha=0.6, label='Portfolios')
-    plt.colorbar(scatter, ax=ax2, label='Sharpe Ratio')
+    sigma_p = np.sqrt(np.dot(weights, np.dot(cov, weights)))
 
-    ax2.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=200,
-                label=f'Optimal Risky Portfolio')
-    ax2.scatter(0, rf * 100, c='white', marker='o', s=100, label=f'Risk-Free Rate ({rf * 100:.2f}%)')
+    fig2, ax2 = plt.subplots(figsize=(12, 8))
+    scatter = ax2.scatter(sigma_list * 100, mu_list * 100, c=sharpe_list, cmap='viridis', alpha=0.5)
+    plt.colorbar(scatter, label="Sharpe Ratio")
 
-    # --- CAL Line Range from covariance trace ---
-    try:
-        max_sigma_cov = np.sqrt(np.trace(cov))
-        x_limit = max(np.max(sigma_list), sigma_p * 1.2, sigma_c * 1.2, max_sigma_cov * 1.5)
-    except:
-        x_limit = max(np.max(sigma_list), sigma_p * 1.2, sigma_c * 1.2)
+    ax2.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=200, label='Optimal Risky Portfolio')
+    ax2.scatter(0, rf * 100, c='blue', marker='o', s=100, label=f'Risk-Free Rate ({rf * 100:.2f}%)')
 
-    x_cal = np.linspace(0, x_limit * 100, 100)
-    slope = (mu_p - rf) / sigma_p if sigma_p > 0 else 0
-    y_cal = rf * 100 + slope * x_cal
-    ax2.plot(x_cal, y_cal, 'r--', label='Capital Allocation Line (CAL)')
+    # CAL
+    x = np.linspace(0, max(sigma_list) * 1.2, 100)
+    y = rf + (mu_p - rf) / sigma_p * x
+    ax2.plot(x * 100, y * 100, 'r--', label='Capital Allocation Line (CAL)')
 
-    ax2.scatter(sigma_c * 100, expected_rc * 100, c='lime', marker='D', s=150,
+    # Optimal Complete Portfolio
+    ax2.scatter(sigma_c * 100, expected_rc * 100, c='green', marker='D', s=150,
                 label=f'Optimal Complete Portfolio (y={y_capped:.2f})')
 
-    if abs(y_opt - y_capped) > 1e-3:
-        sigma_uncapped = y_opt * sigma_p
-        expected_uncapped = y_opt * mu_p + (1 - y_opt) * rf
-        ax2.scatter(sigma_uncapped * 100, expected_uncapped * 100, c='purple', marker='D', s=150,
-                    label=f'Unconstrained (y={y_opt:.2f})')
-
-    ax2.set_facecolor('black')
-    ax2.set_title('Efficient Frontier with CAL', color='white')
-    ax2.set_xlabel('Volatility (%)', color='white')
-    ax2.set_ylabel('Expected Return (%)', color='white')
-    ax2.tick_params(axis='x', colors='white')
-    ax2.tick_params(axis='y', colors='white')
-    ax2.legend(facecolor='black', labelcolor='white')
+    ax2.set_title("Efficient Frontier with Optimal Complete Portfolio")
+    ax2.set_xlabel("Volatility (Risk) (%)")
+    ax2.set_ylabel("Expected Return (%)")
+    ax2.legend()
     ax2.grid(False)
-
-    st.markdown("#### Portfolio Tickers")
-    st.write(f"Selected tickers: {', '.join(tickers)}")
+    plt.tight_layout()
     st.pyplot(fig2)
+
+    st.markdown("#### Selected Tickers")
+    st.write(f"{', '.join(tickers)}")
