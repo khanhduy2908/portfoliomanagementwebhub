@@ -66,8 +66,15 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
                 label=f'Optimal Risky Portfolio')
     ax2.scatter(0, rf * 100, c='white', marker='o', s=100, label=f'Risk-Free Rate ({rf * 100:.2f}%)')
 
-    slope = (mu_p - rf) / sigma_p if sigma_p != 0 else 0
-    x_cal = np.linspace(0, max(sigma_list) * 1.5, 100)
+    # --- CAL Line Range from covariance trace ---
+    try:
+        max_sigma_cov = np.sqrt(np.trace(cov))
+        x_limit = max(np.max(sigma_list), sigma_p * 1.2, sigma_c * 1.2, max_sigma_cov * 1.5)
+    except:
+        x_limit = max(np.max(sigma_list), sigma_p * 1.2, sigma_c * 1.2)
+
+    x_cal = np.linspace(0, x_limit * 100, 100)
+    slope = (mu_p - rf) / sigma_p if sigma_p > 0 else 0
     y_cal = rf * 100 + slope * x_cal
     ax2.plot(x_cal, y_cal, 'r--', label='Capital Allocation Line (CAL)')
 
@@ -91,5 +98,4 @@ def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
 
     st.markdown("#### Portfolio Tickers")
     st.write(f"Selected tickers: {', '.join(tickers)}")
-
     st.pyplot(fig2)
