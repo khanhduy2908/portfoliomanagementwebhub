@@ -139,7 +139,7 @@ if run_analysis:
             block_h1_visualization.display_portfolio_info(portfolio_info, alloc_df)
             st.success("H1 – Portfolio Summary Displayed")
 
-            block_h2_visualization.run(capital_alloc, config.total_capital, tickers_portfolio)
+            block_h2_visualization.run(capital_alloc, portfolio_info['capital_rf'], tickers_portfolio)
             st.success("H2 – Allocation Visualized")
 
             if isinstance(returns_benchmark.index, pd.PeriodIndex):
