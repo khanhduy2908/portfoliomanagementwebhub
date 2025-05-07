@@ -148,6 +148,7 @@ if run_analysis:
                 best_portfolio=best_portfolio,
                 mu_p=mu.mean(),
                 cov=cov,
+                sigma_p=sigma_p,
                 rf=config.rf,
                 sigma_c=sigma_c,
                 expected_rc=expected_rc,
