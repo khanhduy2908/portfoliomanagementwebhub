@@ -55,7 +55,7 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
         ax1.set_ylabel("Cumulative Return (%)", color='white')
         ax1.set_xlabel("Time", color='white')
         ax1.legend(fontsize=8, facecolor='#1e1e1e', labelcolor='white')
-        ax1.grid(True, alpha=0.3)
+        ax1.grid(False)
         ax1.tick_params(colors='white')
         ax1.set_facecolor('#1e1e1e')
 
@@ -98,7 +98,7 @@ def run(data_stocks, data_benchmark, benchmark_symbol,
         ax2.set_xlabel("Volatility (%)", color='white')
         ax2.set_ylabel("Return (%)", color='white')
         ax2.tick_params(colors='white')
-        ax2.grid(True, alpha=0.3)
+        ax2.grid(False)
         ax2.set_facecolor('#1e1e1e')
 
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
