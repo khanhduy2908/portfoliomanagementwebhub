@@ -3,9 +3,22 @@ import streamlit as st
 import pandas as pd
 
 def run(capital_alloc, capital_rf, capital_risky, tickers):
+    if not capital_alloc or not tickers or capital_rf is None or capital_risky is None:
+        st.error("⚠️ Missing capital allocation inputs.")
+        return
+
+    try:
+        sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
+    except KeyError as e:
+        st.error(f"⚠️ Missing allocation for ticker: {e}")
+        return
+
     labels = ['Risk-Free Asset'] + tickers
-    sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
     total = capital_rf + capital_risky
+    if total == 0:
+        st.error("⚠️ Total capital is zero. Cannot compute allocation.")
+        return
+
     percentages = [s / total * 100 for s in sizes]
 
     col1, col2 = st.columns([2, 1])
@@ -28,7 +41,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         for autotext in autotexts:
             autotext.set_color('white')
 
-        ax.set_title("Complete Portfolio Capital Allocation", fontsize=12, color='white')
+        ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
         fig.patch.set_facecolor('#1e1e1e')
         ax.set_facecolor('#1e1e1e')
         st.pyplot(fig)
@@ -46,5 +59,5 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         }])
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
-        st.markdown("### Capital Allocation Summary")
+        st.markdown("**Capital Breakdown**")
         st.dataframe(summary_df, use_container_width=True, height=260)
