@@ -8,30 +8,35 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         return
 
     try:
-        # Creating the values for capital allocation (including risk-free asset)
-        sizes = [capital_rf]
-        # Ensure all tickers have a value in capital_alloc
+        # Tạo danh sách sizes cho việc phân bổ vốn (bao gồm cả tài sản không có rủi ro)
+        sizes = [capital_rf]  # Khởi tạo với capital_rf (tài sản không rủi ro)
+        
+        # Kiểm tra và lấy giá trị từ capital_alloc cho mỗi ticker
         for t in tickers:
-            sizes.append(capital_alloc.get(t, 0))  # Default to 0 if ticker not in capital_alloc
+            sizes.append(capital_alloc.get(t, 0))  # Nếu ticker không có trong capital_alloc, gán giá trị mặc định là 0
     except KeyError as e:
         st.error(f"⚠️ Missing allocation for ticker: {e}")
         return
 
+    # Các nhãn cho biểu đồ pie chart
     labels = ['Risk-Free Asset'] + tickers
-    total = capital_rf + capital_risky
+    total = capital_rf + capital_risky  # Tổng vốn đầu tư
     if total == 0:
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
+    # Tính tỷ lệ phần trăm cho từng tài sản
     percentages = [s / total * 100 for s in sizes]
 
+    # Chia giao diện thành 2 cột
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        # Creating Pie Chart for capital allocation
+        # Vẽ Pie Chart để phân bổ vốn
         fig, ax = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
         colors = plt.cm.Set3.colors[:len(labels)]
 
+        # Tạo biểu đồ Pie
         wedges, texts, autotexts = ax.pie(
             sizes,
             labels=labels,
@@ -41,6 +46,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
             textprops={'color': 'white', 'fontsize': 10}
         )
 
+        # Định dạng màu sắc cho text trong Pie chart
         for text in texts:
             text.set_color('white')
         for autotext in autotexts:
@@ -52,7 +58,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         st.pyplot(fig)
 
     with col2:
-        # Creating a summary dataframe
+        # Tạo bảng phân bổ vốn
         summary_df = pd.DataFrame({
             "Asset": labels,
             "Capital (VND)": [f"{v:,.0f}" for v in sizes],
@@ -65,5 +71,6 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         }])
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
+        # Hiển thị bảng phân bổ vốn
         st.markdown("**Capital Breakdown**")
         st.dataframe(summary_df, use_container_width=True, height=260)
