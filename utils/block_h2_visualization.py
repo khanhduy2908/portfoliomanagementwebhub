@@ -14,7 +14,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         return
 
     try:
-        sizes = [[capital_rf] + [capital_alloc[t] for t in tickers]
+        sizes = [capital_rf] + [capital_alloc[t] for t in tickers]
     except KeyError as e:
         st.error(f"⚠️ Missing allocation for ticker: {e}")
         return
@@ -47,7 +47,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         for autotext in autotexts:
             autotext.set_color('white')
 
-        ax.set_title("Capital Allocation: Risk-Free vs Risky Assets", fontsize=12, color='white')
+        ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
         fig.patch.set_facecolor('#1e1e1e')
         ax.set_facecolor('#1e1e1e')
         st.pyplot(fig)
