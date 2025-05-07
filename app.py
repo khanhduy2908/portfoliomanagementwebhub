@@ -147,13 +147,14 @@ if run_analysis:
                 results_ef=results_ef,
                 best_portfolio=best_portfolio,
                 mu_p=mu.mean(),
-                sigma_p=np.std(simulated_returns @ weights),
+                cov=cov,
                 rf=config.rf,
                 sigma_c=sigma_c,
                 expected_rc=expected_rc,
                 y_capped=y_capped,
                 y_opt=y_opt,
-                tickers=tickers_portfolio
+                tickers=tickers_portfolio,
+                weights=weights
             )
             st.success("Block H3 – Efficient Frontier and CAL displayed.")
 
