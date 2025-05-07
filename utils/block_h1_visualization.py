@@ -21,10 +21,3 @@ def display_portfolio_info(portfolio_info, alloc_df):
         st.markdown(f"**Capital in Risk-Free Asset**: `{portfolio_info['capital_rf']:,.0f} VND`")
         st.markdown(f"**Capital in Risky Assets**: `{portfolio_info['capital_risky']:,.0f} VND`")
         st.markdown(f"**Total Capital**: `{portfolio_info['capital_rf'] + portfolio_info['capital_risky']:,.0f} VND`")
-
-    st.markdown("---")
-    st.markdown("### Allocation to Risky Assets")
-    st.dataframe(
-        alloc_df.style.format({"Allocated Capital (VND)": "{:,.0f}"}),
-        use_container_width=True
-    )
