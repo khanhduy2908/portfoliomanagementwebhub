@@ -3,12 +3,6 @@ import matplotlib.patheffects as path_effects
 import streamlit as st
 import pandas as pd
 
-def get_contrast_color(rgb):
-    """Chọn màu chữ (đen hoặc trắng) dựa trên độ sáng nền."""
-    r, g, b = rgb
-    brightness = r * 0.299 + g * 0.587 + b * 0.114
-    return 'black' if brightness > 186 else 'white'
-
 def run(capital_alloc, capital_rf, capital_risky, tickers):
     if not capital_alloc or not tickers or capital_rf is None or capital_risky is None:
         st.error("⚠️ Missing capital allocation inputs.")
@@ -29,27 +23,34 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         fig, ax = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
         colors = plt.cm.Set3.colors[:len(labels)]
 
-        wedges, texts, autotexts = ax.pie(
+        wedges, texts, _ = ax.pie(
             sizes,
-            labels=labels,
-            autopct='%1.1f%%',
+            labels=None,
             startangle=90,
             colors=colors,
-            textprops={'fontsize': 10}
+            radius=1
         )
 
-        for i, autotext in enumerate(autotexts):
-            rgb = wedges[i].get_facecolor()[:3]
-            rgb_scaled = [int(c * 255) for c in rgb]
-            color = get_contrast_color(rgb_scaled)
-            autotext.set_color(color)
-            autotext.set_path_effects([
+        # Add percentage manually with better contrast and style
+        for i, p in enumerate(percentages):
+            ang = (wedges[i].theta2 + wedges[i].theta1) / 2
+            x = 0.7 * np.cos(np.deg2rad(ang))
+            y = 0.7 * np.sin(np.deg2rad(ang))
+            txt = ax.text(
+                x, y, f"{p:.1f}%", ha='center', va='center',
+                fontsize=10, color='white', weight='bold'
+            )
+            txt.set_path_effects([
                 path_effects.Stroke(linewidth=1.5, foreground='black'),
                 path_effects.Normal()
             ])
 
-        for text in texts:
-            text.set_color('white')
+        # Add labels
+        for i, wedge in enumerate(wedges):
+            ang = (wedge.theta2 + wedge.theta1) / 2
+            x = 1.15 * np.cos(np.deg2rad(ang))
+            y = 1.15 * np.sin(np.deg2rad(ang))
+            ax.text(x, y, labels[i], ha='center', va='center', color='white', fontsize=9)
 
         ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
         fig.patch.set_facecolor('#1e1e1e')
