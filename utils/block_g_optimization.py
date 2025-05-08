@@ -16,11 +16,12 @@ def corr_to_dist(corr):
     return np.sqrt(0.5 * (1 - corr))
 
 def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark,
-        alpha_cvar=0.95, lambda_cvar=5, beta_l2=0.01, cvar_soft_limit=6.5, n_simulations=50000):
+        alpha_cvar=0.95, lambda_cvar=5, beta_l2=0.01, cvar_soft_limit=6.0,
+        n_simulations=10000, n_hrp_variants=6):
 
     benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
     hrp_cvar_results = []
-    solvers = ['SCS', 'ECOS']
+    solvers = ['ECOS']
 
     for combo in valid_combinations:
         tickers = list(combo)
@@ -33,17 +34,17 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             cov = cov_df.loc[tickers, tickers].values
 
             if np.any(np.linalg.eigvalsh(cov) < -1e-6):
-                warnings.warn(f"[{combo}] ❌ Covariance matrix not PSD. Skipping.")
                 continue
 
             corr = cov_to_corr(cov)
             dist = corr_to_dist(corr)
             Z = linkage(squareform(dist, checks=False), method='ward')
 
-            for seed in range(10):  # Tạo 10 tổ hợp HRP khác nhau
+            for seed in range(n_hrp_variants):
                 np.random.seed(seed)
+                noise = np.random.rand(len(tickers)) * 0.01
                 clusters = fcluster(Z, t=len(tickers), criterion='maxclust')
-                order = np.argsort(clusters + np.random.rand(len(clusters)) * 0.01)
+                order = np.argsort(clusters + noise)
 
                 mu_ord = mu[order]
                 cov_ord = cov[np.ix_(order, order)]
@@ -86,7 +87,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                 exceed_flag = final_cvar > cvar_soft_limit
 
                 hrp_cvar_results.append({
-                    'Portfolio': "-".join(tickers_ord),
+                    'Portfolio': "-".join(tickers),
                     'Expected Return (%)': port_ret,
                     'Volatility (%)': port_vol,
                     'CVaR (%)': final_cvar,
@@ -95,17 +96,9 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                     'Weights': dict(zip(tickers_ord, w_opt))
                 })
 
-        except Exception as e:
-            warnings.warn(f"[{combo}] ❌ {e}")
+        except Exception:
             continue
 
-    # Lọc các portfolio có CVaR quá cao (nếu cần)
-    hrp_cvar_results = [res for res in hrp_cvar_results if res['CVaR (%)'] <= cvar_soft_limit * 1.5]
-
-    # Sắp xếp lại để dải frontier hợp lý
-    hrp_cvar_results = sorted(hrp_cvar_results, key=lambda x: (x['Volatility (%)'], -x['Sharpe Ratio']))
-
-    # Chuẩn bị output
     mu_list = [res['Expected Return (%)'] for res in hrp_cvar_results]
     sigma_list = [res['Volatility (%)'] for res in hrp_cvar_results]
     sharpe_list = [res['Sharpe Ratio'] for res in hrp_cvar_results]
