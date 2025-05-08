@@ -1,3 +1,5 @@
+# utils/block_g_optimization.py
+
 import numpy as np
 import pandas as pd
 import cvxpy as cp
@@ -38,7 +40,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             dist = corr_to_dist(corr)
             Z = linkage(squareform(dist, checks=False), method='ward')
 
-            for seed in range(3):  # Multiple HRP variants
+            for seed in range(10):  # Tạo 10 tổ hợp HRP khác nhau
                 np.random.seed(seed)
                 clusters = fcluster(Z, t=len(tickers), criterion='maxclust')
                 order = np.argsort(clusters + np.random.rand(len(clusters)) * 0.01)
@@ -84,7 +86,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                 exceed_flag = final_cvar > cvar_soft_limit
 
                 hrp_cvar_results.append({
-                    'Portfolio': "-".join(tickers),
+                    'Portfolio': "-".join(tickers_ord),
                     'Expected Return (%)': port_ret,
                     'Volatility (%)': port_vol,
                     'CVaR (%)': final_cvar,
@@ -97,14 +99,13 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             warnings.warn(f"[{combo}] ❌ {e}")
             continue
 
-    hrp_df = pd.DataFrame(hrp_cvar_results)
-    if not hrp_df.empty:
-        hrp_df = hrp_df.sort_values(by='Sharpe Ratio', ascending=False).reset_index(drop=True)
-        print("\n📊 Top Portfolios (HRP + CVaR):")
-        print(hrp_df[['Portfolio', 'Expected Return (%)', 'Volatility (%)', 'CVaR (%)', 'Sharpe Ratio', 'CVaR Exceed?']].round(2))
-    else:
-        print("⚠️ No valid portfolios found.")
+    # Lọc các portfolio có CVaR quá cao (nếu cần)
+    hrp_cvar_results = [res for res in hrp_cvar_results if res['CVaR (%)'] <= cvar_soft_limit * 1.5]
 
+    # Sắp xếp lại để dải frontier hợp lý
+    hrp_cvar_results = sorted(hrp_cvar_results, key=lambda x: (x['Volatility (%)'], -x['Sharpe Ratio']))
+
+    # Chuẩn bị output
     mu_list = [res['Expected Return (%)'] for res in hrp_cvar_results]
     sigma_list = [res['Volatility (%)'] for res in hrp_cvar_results]
     sharpe_list = [res['Sharpe Ratio'] for res in hrp_cvar_results]
