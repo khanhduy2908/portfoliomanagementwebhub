@@ -5,7 +5,7 @@ import streamlit as st
 import numpy as np
 
 def run(hrp_result_dict, benchmark_return_mean, results_ef, best_portfolio,
-        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, weights, sigma_p_original, cov):
+        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, weights, cov):
 
     st.markdown("### Efficient Frontier and Capital Allocation Line (CAL)")
 
