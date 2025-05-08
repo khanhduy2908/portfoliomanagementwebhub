@@ -2,15 +2,16 @@ import matplotlib.pyplot as plt
 import streamlit as st
 import pandas as pd
 
-def run(capital_alloc, capital_rf, capital_risky, tickers):
+def run(capital_alloc: dict, capital_rf: float, capital_risky: float, tickers: list):
     if not capital_alloc or not tickers or capital_rf is None or capital_risky is None:
         st.error("⚠️ Missing capital allocation inputs.")
         return
 
-    # 1. Chuẩn bị dữ liệu
-    sizes = [capital_rf] + [capital_alloc.get(t, 0) for t in tickers]
-    labels = ['Risk-Free Asset'] + tickers
-    total = sum(sizes)
+    # 1. Đồng bộ tickers từ chính capital_alloc keys (tránh mismatch)
+    tickers_final = list(capital_alloc.keys())
+    sizes = [capital_rf] + [capital_alloc[t] for t in tickers_final]
+    labels = ['Risk-Free Asset'] + tickers_final
+    total = capital_rf + capital_risky
 
     if total == 0:
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
@@ -18,7 +19,7 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
 
     percentages = [s / total * 100 for s in sizes]
 
-    # 2. Layout 2 cột
+    # 2. Hiển thị hai cột
     col1, col2 = st.columns([2, 1])
 
     # 3. Biểu đồ Pie
