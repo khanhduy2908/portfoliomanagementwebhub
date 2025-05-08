@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-def display_portfolio_info(portfolio_info, alloc_df):
+def display_portfolio_info(portfolio_info):
     st.markdown("### Optimal Complete Portfolio Summary")
 
     col1, col2 = st.columns(2)
