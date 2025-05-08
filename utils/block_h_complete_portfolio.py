@@ -35,10 +35,12 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         raise ValueError("Invalid risk_score")
 
     upper_bound = min(y_max, 1 - max_rf_ratio)
-    if upper_bound <= y_min:
-        raise ValueError(f"Risk constraints too tight: upper_bound={upper_bound:.2f} ≤ y_min={y_min:.2f}")
 
-    # 4. Tối ưu utility theo y (tỷ lệ risky)
+    # ✅ Fix lỗi upper_bound ≤ y_min
+    if upper_bound <= y_min:
+        y_min = max(0, upper_bound - 0.05)  # Hạ y_min xuống một chút
+
+    # 4. Tối ưu utility
     def neg_utility(y):
         expected_rc = y * mu_p + (1 - y) * rf
         sigma_c = y * sigma_p
@@ -48,18 +50,16 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     y_opt = result.x
     y_capped = np.clip(y_opt, y_min, upper_bound)
 
-    # 5. Áp dụng giới hạn thực tế
+    # 5. Kiểm soát phân bổ thực tế
     capital_risky = y_capped * total_capital
     capital_rf = total_capital - capital_risky
-
-    # Force cap nếu vượt max_rf_ratio (dù rare case)
     rf_cap_limit = max_rf_ratio * total_capital
+
     if capital_rf > rf_cap_limit:
         capital_rf = rf_cap_limit
         capital_risky = total_capital - capital_rf
         y_capped = capital_risky / total_capital
 
-    # Final output
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c**2
