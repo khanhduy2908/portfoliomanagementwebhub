@@ -73,7 +73,3 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         st.markdown("**Capital Breakdown**")
         st.markdown("Capital in VND. Allocation rounded to 0.1%.")
         st.dataframe(summary_df, use_container_width=True, height=260)
-
-    if False:
-        st.markdown("### Capital Allocation by Ticker")
-        st.dataframe(alloc_df.style.format({"Allocated Capital (VND)": "{:,.0f}"}), use_container_width=True)
