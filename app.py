@@ -132,8 +132,9 @@ if run_analysis:
 
             alloc_df = pd.DataFrame({
                 "Ticker": list(capital_alloc.keys()),
+                "Allocated Capital (VND)": list(capital_alloc.values())
             })
-            block_h1_visualization.display_portfolio_info(portfolio_info)
+            block_h1_visualization.display_portfolio_info(portfolio_info, alloc_df)
             st.success("H1 – Portfolio Summary Displayed")
 
             block_h2_visualization.run(capital_alloc, portfolio_info['capital_rf'], portfolio_info['capital_risky'], tickers_portfolio)
