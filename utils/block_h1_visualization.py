@@ -21,3 +21,11 @@ def display_portfolio_info(portfolio_info, alloc_df):
         st.markdown(f"**Capital in Risk-Free Asset:** `{portfolio_info['capital_rf']:,.0f} VND`")
         st.markdown(f"**Capital in Risky Assets:** `{portfolio_info['capital_risky']:,.0f} VND`")
         st.markdown(f"**Total Capital Allocated:** `{portfolio_info['capital_rf'] + portfolio_info['capital_risky']:,.0f} VND`")
+
+    st.markdown("### Risk Profile Commentary")
+    if portfolio_info['risk_score'] <= 17:
+        st.info("🛡️ This is a **conservative portfolio** with high exposure to risk-free assets, focusing on capital preservation.")
+    elif 18 <= portfolio_info['risk_score'] <= 27:
+        st.info("⚖️ This is a **balanced portfolio**, blending growth and stability through diversified asset exposure.")
+    else:
+        st.info("🚀 This is an **aggressive portfolio** aiming for high returns, with minimal allocation to risk-free assets.")
