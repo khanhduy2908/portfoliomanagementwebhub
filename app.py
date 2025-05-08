@@ -157,8 +157,7 @@ if run_analysis:
                 y_opt=y_opt,
                 tickers=tickers_portfolio,
                 weights=weights,
-                sigma_p=sigma_p,
-                sigma_p_original=sigma_p_original
+                sigma_p=sigma_p
             )
             st.success("H3 – Frontier and CAL Visualized")
 
