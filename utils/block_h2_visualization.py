@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as path_effects
 import streamlit as st
 import pandas as pd
 
@@ -8,55 +7,47 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         st.error("⚠️ Missing capital allocation inputs.")
         return
 
+    # 1. Chuẩn bị dữ liệu
     sizes = [capital_rf] + [capital_alloc.get(t, 0) for t in tickers]
     labels = ['Risk-Free Asset'] + tickers
-    total = capital_rf + capital_risky
+    total = sum(sizes)
 
     if total == 0:
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
     percentages = [s / total * 100 for s in sizes]
+
+    # 2. Layout 2 cột
     col1, col2 = st.columns([2, 1])
 
+    # 3. Biểu đồ Pie
     with col1:
         fig, ax = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
-        colors = plt.cm.Set3.colors[:len(labels)]
+        cmap = plt.cm.get_cmap('tab20c', len(labels))
+        colors = [cmap(i) for i in range(len(labels))]
 
-        wedges, texts, _ = ax.pie(
+        wedges, texts, autotexts = ax.pie(
             sizes,
-            labels=None,
+            labels=labels,
+            autopct='%1.1f%%',
             startangle=90,
             colors=colors,
-            radius=1
+            textprops={'color': 'white', 'fontsize': 9}
         )
 
-        # Add percentage manually with better contrast and style
-        for i, p in enumerate(percentages):
-            ang = (wedges[i].theta2 + wedges[i].theta1) / 2
-            x = 0.7 * np.cos(np.deg2rad(ang))
-            y = 0.7 * np.sin(np.deg2rad(ang))
-            txt = ax.text(
-                x, y, f"{p:.1f}%", ha='center', va='center',
-                fontsize=10, color='white', weight='bold'
-            )
-            txt.set_path_effects([
-                path_effects.Stroke(linewidth=1.5, foreground='black'),
-                path_effects.Normal()
-            ])
+        for text in texts:
+            text.set_color('white')
+        for autotext in autotexts:
+            autotext.set_color('yellow')
 
-        # Add labels
-        for i, wedge in enumerate(wedges):
-            ang = (wedge.theta2 + wedge.theta1) / 2
-            x = 1.15 * np.cos(np.deg2rad(ang))
-            y = 1.15 * np.sin(np.deg2rad(ang))
-            ax.text(x, y, labels[i], ha='center', va='center', color='white', fontsize=9)
-
-        ax.set_title("Complete Portfolio Allocation", fontsize=12, color='white')
-        fig.patch.set_facecolor('#1e1e1e')
+        ax.set_title("Capital Allocation: Risk-Free vs Risky Assets", fontsize=12, color='white')
         ax.set_facecolor('#1e1e1e')
+        fig.patch.set_facecolor('#1e1e1e')
+        fig.tight_layout()
         st.pyplot(fig)
 
+    # 4. Bảng phân bổ vốn
     with col2:
         summary_df = pd.DataFrame({
             "Asset": labels,
@@ -71,5 +62,4 @@ def run(capital_alloc, capital_rf, capital_risky, tickers):
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
         st.markdown("**Capital Breakdown**")
-        st.markdown("Capital in VND. Allocation rounded to 0.1%.")
         st.dataframe(summary_df, use_container_width=True, height=260)
