@@ -48,20 +48,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     rolling_sharpe = (portfolio_returns - rf * 100).rolling(12).mean() / portfolio_returns.rolling(12).std()
     rolling_sharpe = rolling_sharpe.dropna()
 
-    # --- Regression stats ---
-    aligned = pd.concat([portfolio_returns, benchmark_returns], axis=1).dropna()
-    aligned.columns = ['Portfolio', 'Benchmark']
-    if len(aligned) >= 2:
-        reg = LinearRegression().fit(aligned[['Benchmark']], aligned['Portfolio'])
-        alpha = reg.intercept_
-        beta = reg.coef_[0]
-        r2 = reg.score(aligned[['Benchmark']], aligned['Portfolio'])
-        tracking_error = np.std(aligned['Portfolio'] - aligned['Benchmark'])
-        info_ratio = (mean_return - benchmark_returns.mean()) / tracking_error if tracking_error else np.nan
-    else:
-        alpha = beta = r2 = tracking_error = info_ratio = np.nan
-
-    # --- Summary tables ---
+    # --- Summary table ---
     benchmark_cagr = benchmark_cumulative.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
     summary_df = pd.DataFrame({
         'Metric': ['Mean Return (%)', 'Volatility (%)', 'Sharpe Ratio', 'Sortino Ratio',
@@ -79,11 +66,6 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         ]
     })
 
-    regression_df = pd.DataFrame({
-        'Metric': ['Alpha', 'Beta', 'R-squared', 'Tracking Error', 'Information Ratio'],
-        'Value': [alpha, beta, r2, tracking_error, info_ratio]
-    })
-
     # --- Visualizations ---
     st.subheader("Cumulative Returns")
     fig1, ax1 = plt.subplots(figsize=(10, 4), facecolor='#1e1e1e')
@@ -95,18 +77,23 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     ax1.tick_params(colors='white')
     ax1.legend(facecolor='#1e1e1e', labelcolor='white')
     ax1.grid(False)
+    fig1.patch.set_facecolor('#1e1e1e')
     st.pyplot(fig1)
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Drawdown (%)")
+        drawdown.index = pd.to_datetime(drawdown.index)
         fig2, ax2 = plt.subplots(figsize=(6, 3), facecolor='#1e1e1e')
-        ax2.fill_between(drawdown.index, drawdown * 100, color='red', alpha=0.4)
+        ax2.fill_between(drawdown.index, drawdown.values * 100, color='red', alpha=0.4)
         ax2.set_title("Portfolio Drawdown", color='white')
-        ax2.set_ylabel("Drawdown", color='white')
+        ax2.set_ylabel("Drawdown (%)", color='white')
         ax2.tick_params(colors='white')
         ax2.grid(False)
+        ax2.set_facecolor('#1e1e1e')
+        fig2.patch.set_facecolor('#1e1e1e')
+        fig2.tight_layout()
         st.pyplot(fig2)
 
     with col2:
@@ -118,6 +105,9 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
             ax3.set_title("Rolling Sharpe Ratio", color='white')
             ax3.tick_params(colors='white')
             ax3.grid(False)
+            ax3.set_facecolor('#1e1e1e')
+            fig3.patch.set_facecolor('#1e1e1e')
+            fig3.tight_layout()
             st.pyplot(fig3)
         else:
             st.warning("Not enough data for rolling Sharpe ratio.")
@@ -125,7 +115,4 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     st.subheader("Performance Summary")
     st.dataframe(summary_df.round(4), use_container_width=True)
 
-    st.subheader("Regression Statistics")
-    st.dataframe(regression_df.round(4), use_container_width=True)
-
-    return summary_df, regression_df
+    return summary_df
