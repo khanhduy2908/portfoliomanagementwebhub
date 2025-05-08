@@ -1,5 +1,3 @@
-# utils/block_g_optimization.py
-
 import numpy as np
 import pandas as pd
 import cvxpy as cp
@@ -16,12 +14,12 @@ def corr_to_dist(corr):
     return np.sqrt(0.5 * (1 - corr))
 
 def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark,
-        alpha_cvar=0.95, lambda_cvar=5, beta_l2=0.01, cvar_soft_limit=6.0,
-        n_simulations=10000, n_hrp_variants=6):
+        alpha_cvar=0.95, lambda_cvar=5, beta_l2=0.01, cvar_soft_limit=6.5, n_simulations=10000):
 
     benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
     hrp_cvar_results = []
-    solvers = ['ECOS']
+    solvers = ['SCS', 'ECOS']
+    fallback_result = None
 
     for combo in valid_combinations:
         tickers = list(combo)
@@ -32,7 +30,6 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
 
             mu = np.array([mu_dict[t] for t in tickers]) / 100
             cov = cov_df.loc[tickers, tickers].values
-
             if np.any(np.linalg.eigvalsh(cov) < -1e-6):
                 continue
 
@@ -40,11 +37,10 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             dist = corr_to_dist(corr)
             Z = linkage(squareform(dist, checks=False), method='ward')
 
-            for seed in range(n_hrp_variants):
+            for seed in range(5):  # Tăng tính đa dạng
                 np.random.seed(seed)
-                noise = np.random.rand(len(tickers)) * 0.01
                 clusters = fcluster(Z, t=len(tickers), criterion='maxclust')
-                order = np.argsort(clusters + noise)
+                order = np.argsort(clusters + np.random.rand(len(clusters)) * 0.01)
 
                 mu_ord = mu[order]
                 cov_ord = cov[np.ix_(order, order)]
@@ -66,7 +62,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                 for solver in solvers:
                     try:
                         prob = cp.Problem(objective, constraints)
-                        prob.solve(solver=solver, max_iters=10000)
+                        prob.solve(solver=solver, max_iters=5000)
                         if prob.status in ['optimal', 'optimal_inaccurate']:
                             success = True
                             break
@@ -86,7 +82,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                 sharpe = (port_ret - benchmark_return_mean * 100) / port_vol if port_vol > 0 else 0
                 exceed_flag = final_cvar > cvar_soft_limit
 
-                hrp_cvar_results.append({
+                result = {
                     'Portfolio': "-".join(tickers),
                     'Expected Return (%)': port_ret,
                     'Volatility (%)': port_vol,
@@ -94,10 +90,25 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                     'Sharpe Ratio': sharpe,
                     'CVaR Exceed?': exceed_flag,
                     'Weights': dict(zip(tickers_ord, w_opt))
-                })
+                }
+                hrp_cvar_results.append(result)
 
-        except Exception:
+                if fallback_result is None or result['Sharpe Ratio'] > fallback_result['Sharpe Ratio']:
+                    fallback_result = result
+
+        except Exception as e:
+            warnings.warn(f"⚠️ Failed for {combo}: {e}")
             continue
+
+    if not hrp_cvar_results and fallback_result is not None:
+        hrp_cvar_results.append(fallback_result)
+
+    if not hrp_cvar_results:
+        raise ValueError("No feasible HRP-CVaR portfolios found.")
+
+    # Final Outputs
+    hrp_df = pd.DataFrame(hrp_cvar_results)
+    hrp_df = hrp_df.sort_values(by='Sharpe Ratio', ascending=False).reset_index(drop=True)
 
     mu_list = [res['Expected Return (%)'] for res in hrp_cvar_results]
     sigma_list = [res['Volatility (%)'] for res in hrp_cvar_results]
