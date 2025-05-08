@@ -1,3 +1,5 @@
+# utils/block_i_performance_analysis.py
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -68,7 +70,9 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
 
     # --- Visualizations ---
     st.subheader("Cumulative Returns")
-    fig1, ax1 = plt.subplots(figsize=(10, 4), facecolor='#1e1e1e')
+    fig1, ax1 = plt.subplots(figsize=(10, 4))
+    fig1.patch.set_facecolor('#121212')
+    ax1.set_facecolor('#121212')
     ax1.plot(cumulative_returns.index, cumulative_returns, label='Portfolio', color='cyan')
     ax1.plot(benchmark_cumulative.index, benchmark_cumulative, label='Benchmark', color='magenta')
     ax1.set_title("Cumulative Returns (Normalized)", color='white')
@@ -77,7 +81,6 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     ax1.tick_params(colors='white')
     ax1.legend(facecolor='#1e1e1e', labelcolor='white')
     ax1.grid(False)
-    fig1.patch.set_facecolor('#1e1e1e')
     st.pyplot(fig1)
 
     col1, col2 = st.columns(2)
@@ -85,29 +88,27 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     with col1:
         st.subheader("Drawdown (%)")
         drawdown.index = pd.to_datetime(drawdown.index)
-        fig2, ax2 = plt.subplots(figsize=(6, 3), facecolor='#1e1e1e')
+        fig2, ax2 = plt.subplots(figsize=(6, 3))
+        fig2.patch.set_facecolor('#121212')
+        ax2.set_facecolor('#121212')
         ax2.fill_between(drawdown.index, drawdown.values * 100, color='red', alpha=0.4)
         ax2.set_title("Portfolio Drawdown", color='white')
         ax2.set_ylabel("Drawdown (%)", color='white')
         ax2.tick_params(colors='white')
         ax2.grid(False)
-        ax2.set_facecolor('#1e1e1e')
-        fig2.patch.set_facecolor('#1e1e1e')
-        fig2.tight_layout()
         st.pyplot(fig2)
 
     with col2:
         st.subheader("12-Month Rolling Sharpe Ratio")
         if not rolling_sharpe.empty:
-            fig3, ax3 = plt.subplots(figsize=(6, 3), facecolor='#1e1e1e')
+            fig3, ax3 = plt.subplots(figsize=(6, 3))
+            fig3.patch.set_facecolor('#121212')
+            ax3.set_facecolor('#121212')
             ax3.plot(rolling_sharpe.index, rolling_sharpe, color='orange')
             ax3.axhline(0, linestyle='--', color='white', alpha=0.4)
             ax3.set_title("Rolling Sharpe Ratio", color='white')
             ax3.tick_params(colors='white')
             ax3.grid(False)
-            ax3.set_facecolor('#1e1e1e')
-            fig3.patch.set_facecolor('#1e1e1e')
-            fig3.tight_layout()
             st.pyplot(fig3)
         else:
             st.warning("Not enough data for rolling Sharpe ratio.")
