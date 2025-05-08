@@ -14,7 +14,7 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     weights = np.array([best_portfolio['Weights'][t] for t in tickers])
     weights /= weights.sum()
 
-    # 2. Tính kỳ vọng & độ lệch chuẩn
+    # 2. Tính toán mu và sigma danh mục
     portfolio_name = '-'.join(best_key) if isinstance(best_key, tuple) else str(best_key)
     mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
     cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
@@ -24,7 +24,7 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     if mu_p <= 0 or sigma_p <= 0:
         raise ValueError("Selected portfolio has non-positive return or volatility.")
 
-    # 3. Xác định max risk-free asset theo risk score
+    # 3. Giới hạn tối đa tỷ lệ risk-free theo risk_score
     if 10 <= risk_score <= 17:
         max_rf_ratio = 0.40
     elif 18 <= risk_score <= 27:
@@ -35,12 +35,10 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         raise ValueError("Invalid risk_score")
 
     upper_bound = min(y_max, 1 - max_rf_ratio)
-
-    # ✅ Fix lỗi upper_bound ≤ y_min
     if upper_bound <= y_min:
-        y_min = max(0, upper_bound - 0.05)  # Hạ y_min xuống một chút
+        raise ValueError(f"Risk constraints too tight: upper_bound={upper_bound:.2f} ≤ y_min={y_min:.2f}")
 
-    # 4. Tối ưu utility
+    # 4. Tối ưu hóa utility theo y (risky weight)
     def neg_utility(y):
         expected_rc = y * mu_p + (1 - y) * rf
         sigma_c = y * sigma_p
@@ -50,21 +48,24 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     y_opt = result.x
     y_capped = np.clip(y_opt, y_min, upper_bound)
 
-    # 5. Kiểm soát phân bổ thực tế
+    # 5. Tính toán vốn
     capital_risky = y_capped * total_capital
     capital_rf = total_capital - capital_risky
-    rf_cap_limit = max_rf_ratio * total_capital
 
+    # 6. Kiểm soát nếu vi phạm max_rf_ratio
+    rf_cap_limit = max_rf_ratio * total_capital
     if capital_rf > rf_cap_limit:
         capital_rf = rf_cap_limit
         capital_risky = total_capital - capital_rf
         y_capped = capital_risky / total_capital
 
+    # 7. Cập nhật lại các thông số sau khi bị giới hạn
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c**2
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
+    # 8. Trả về kết quả
     portfolio_info = {
         'portfolio_name': portfolio_name,
         'mu': mu_p,
