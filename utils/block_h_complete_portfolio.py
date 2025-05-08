@@ -53,7 +53,7 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     capital_rf = total_capital - capital_risky
 
     rf_cap_limit = max_rf_ratio * total_capital
-    if capital_rf < rf_cap_limit:
+    if capital_rf > rf_cap_limit:
         capital_rf = rf_cap_limit
         capital_risky = total_capital - capital_rf
         y_capped = capital_risky / total_capital
