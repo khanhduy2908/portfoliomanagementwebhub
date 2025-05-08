@@ -48,7 +48,7 @@ with open("utils/valid_tickers.txt", "r") as f:
 
 # --- Page config ---
 st.set_page_config(page_title="Portfolio Optimization Platform", layout="wide")
-st.title("Institutional Portfolio Optimization Platform")
+st.title("Portfolio Optimization Platform")
 st.sidebar.header("Configuration")
 
 # --- Sidebar inputs ---
