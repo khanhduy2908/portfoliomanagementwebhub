@@ -14,7 +14,6 @@ from utils import (
     block_h_complete_portfolio,
     block_h1_visualization,
     block_h2_visualization,
-    block_h3_visualization,
     block_i_performance_analysis,
     block_i1_visualization,
     block_i2_visualization,
@@ -138,28 +137,6 @@ if run_analysis:
 
             block_h2_visualization.run(capital_alloc, portfolio_info['capital_rf'], portfolio_info['capital_risky'], tickers_portfolio)
             st.success("H2 – Allocation Visualized")
-
-            if isinstance(returns_benchmark.index, pd.PeriodIndex):
-                returns_benchmark.index = returns_benchmark.index.to_timestamp()
-
-            benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
-            block_h3_visualization.run(
-                hrp_result_dict=hrp_result_dict,
-                benchmark_return_mean=benchmark_return_mean,
-                results_ef=results_ef,
-                best_portfolio=best_portfolio,
-                mu_p=mu.mean(),
-                cov=cov,
-                rf=config.rf,
-                sigma_c=sigma_c,
-                expected_rc=expected_rc,
-                y_capped=y_capped,
-                y_opt=y_opt,
-                tickers=tickers_portfolio,
-                weights=weights,
-                sigma_p=sigma_p
-            )
-            st.success("H3 – Frontier and CAL Visualized")
 
             block_i_performance_analysis.run(
                 best_portfolio, returns_pivot_stocks, returns_benchmark,
