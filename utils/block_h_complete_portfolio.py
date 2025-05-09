@@ -38,8 +38,6 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
 
     # 4. Determine feasible upper_bound
     upper_bound = min(y_max, 1 - max_rf_ratio)
-
-    # Auto-adjust y_min if upper_bound is too tight
     if upper_bound <= y_min:
         y_min = max(0.01, upper_bound - 0.01)
 
@@ -53,24 +51,17 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     y_opt = result.x
     y_capped = np.clip(y_opt, y_min, upper_bound)
 
-    # 6. Compute capital allocation
-    capital_risky = y_capped * total_capital
+    # 6. Enforce strict capital limits based on max_rf_ratio
+    capital_risky = np.clip(y_capped * total_capital, 0, (1 - max_rf_ratio) * total_capital)
     capital_rf = total_capital - capital_risky
+    y_capped = capital_risky / total_capital  # update y_capped based on actual allocation
 
-    # Final check (rare case of exceeding max_rf_ratio)
-    rf_cap_limit = max_rf_ratio * total_capital
-    if capital_rf > rf_cap_limit:
-        capital_rf = rf_cap_limit
-        capital_risky = total_capital - capital_rf
-        y_capped = capital_risky / total_capital
-
+    # 7. Final utility calculation
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c**2
-
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
-    # 7. Final output
     portfolio_info = {
         'portfolio_name': portfolio_name,
         'mu': mu_p,
