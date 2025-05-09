@@ -76,21 +76,23 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
         sensitivity_results.append({'Ticker': t, 'Portfolio Impact (%)': impact * 100})
 
     # === Combined layout for F1–F3 ===
-    df_hypo = pd.DataFrame(hypo_results)
     fig1, ax1 = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
     sns.barplot(data=df_hypo, x='Scenario', y='Portfolio Return (%)', palette='Reds', edgecolor='black', ax=ax1)
     ax1.axhline(0, linestyle='--', color='white')
     ax1.set_title("Scenario Impact", color='white')
+    ax1.set_xlabel("Scenario", color='white')
+    ax1.set_ylabel("Portfolio Return (%)", color='white')
     ax1.tick_params(colors='white')
     ax1.set_facecolor('#1e1e1e')
     for label in ax1.get_xticklabels(): label.set_color('white')
     for label in ax1.get_yticklabels(): label.set_color('white')
 
-    df_sens = pd.DataFrame(sensitivity_results)
     fig2, ax2 = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
     sns.barplot(data=df_sens, x='Ticker', y='Portfolio Impact (%)', palette='Blues', edgecolor='black', ax=ax2)
     ax2.axhline(0, linestyle='--', color='white')
     ax2.set_title("Asset Sensitivity", color='white')
+    ax2.set_xlabel("Ticker", color='white')
+    ax2.set_ylabel("Portfolio Impact (%)", color='white')
     ax2.tick_params(colors='white')
     ax2.set_facecolor('#1e1e1e')
     for label in ax2.get_xticklabels(): label.set_color('white')
@@ -102,6 +104,7 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     ax3.axvline(-stress_cvar * 100, color='orange', linestyle='--', label=f"CVaR {int(confidence_level*100)}%: {-stress_cvar*100:.2f}%")
     ax3.set_title("Monte Carlo Return Dist.", color='white')
     ax3.set_xlabel("Portfolio Return (%)", color='white')
+    ax3.set_ylabel("Frequency", color='white')
     ax3.tick_params(colors='white')
     ax3.set_facecolor('#1e1e1e')
     ax3.legend(facecolor='black', labelcolor='white')
@@ -120,8 +123,5 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     })
 
     st.dataframe(summary.round(2), use_container_width=True)
-
-    return summary
-
 
     return summary
