@@ -1,3 +1,5 @@
+# utils/block_h_complete_portfolio.py
+
 import numpy as np
 from scipy.optimize import minimize_scalar
 
