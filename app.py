@@ -1,3 +1,5 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -14,6 +16,7 @@ from utils import (
     block_h_complete_portfolio,
     block_h1_visualization,
     block_h2_visualization,
+    block_h3_visualization,
     block_i_performance_analysis,
     block_i1_visualization,
     block_i2_visualization,
@@ -22,22 +25,23 @@ from utils import (
 
 # --- Helper functions ---
 def map_risk_score_to_A(score):
+    # Liên tục theo bảng phân loại A
     if 10 <= score <= 17:
-        return 30
+        return 25 - (score - 10) * (10 / 7)   # Rất bảo thủ → bảo thủ
     elif 18 <= score <= 27:
-        return 15
+        return 15 - (score - 18) * (10 / 9)   # Bảo thủ → trung bình
     elif 28 <= score <= 40:
-        return 5
+        return 5 - (score - 28) * (4 / 12)    # Trung bình → ưa rủi ro
     else:
         raise ValueError("Risk score must be between 10 and 40.")
 
 def get_risk_profile_description(score):
     if 10 <= score <= 17:
-        return "Low – Capital preservation focus"
+        return "Very Conservative – Capital Preservation Focus"
     elif 18 <= score <= 27:
-        return "Medium – Balanced growth and preservation"
+        return "Moderate – Balanced Risk and Return"
     elif 28 <= score <= 40:
-        return "High – Growth focus"
+        return "Aggressive – Growth Focus"
     else:
         return "Undefined"
 
