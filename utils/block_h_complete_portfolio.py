@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize_scalar
 
-# === Risk-Free Allocation Logic Based on Risk Score and A ===
+# === Tính tỷ lệ tài sản phi rủi ro cho phép theo risk_score và risk_aversion (A) ===
 def get_max_rf_ratio(score, A):
     if 10 <= score <= 17:
         hard_limit = 0.40
@@ -21,20 +21,21 @@ def get_max_rf_ratio(score, A):
 
     return min(hard_limit, suggested)
 
+# === Tối ưu hóa danh mục hoàn chỉnh ===
 def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         rf, A, total_capital, risk_score, y_min=0.6, y_max=0.9):
 
     if not hrp_result_dict:
         raise ValueError("No valid HRP-CVaR results from Block G.")
 
-    # 1. Select best portfolio
+    # 1. Chọn portfolio có Sharpe cao nhất
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
     tickers = list(best_portfolio['Weights'].keys())
     weights = np.array([best_portfolio['Weights'][t] for t in tickers])
     weights /= weights.sum()
 
-    # 2. Compute mu, cov, sigma_p, mu_p
+    # 2. Tính kỳ vọng và độ lệch chuẩn danh mục
     portfolio_name = '-'.join(best_key) if isinstance(best_key, tuple) else str(best_key)
     mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
     cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
@@ -44,13 +45,13 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     if mu_p <= 0 or sigma_p <= 0:
         raise ValueError("Selected portfolio has non-positive return or volatility.")
 
-    # 3. Determine max_rf_ratio from both A and risk_score
+    # 3. Xác định max_rf_ratio hợp lý
     max_rf_ratio = get_max_rf_ratio(risk_score, A)
     upper_bound = min(y_max, 1 - max_rf_ratio)
     if upper_bound <= y_min:
         y_min = max(0.01, upper_bound - 0.01)
 
-    # 4. Optimize y
+    # 4. Tối ưu hóa y để tối đa hóa utility
     def neg_utility(y):
         expected_rc = y * mu_p + (1 - y) * rf
         sigma_c = y * sigma_p
@@ -60,7 +61,7 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     y_opt = result.x
     y_capped = np.clip(y_opt, y_min, upper_bound)
 
-    # 5. Capital allocation
+    # 5. Phân bổ vốn
     capital_risky = y_capped * total_capital
     capital_rf = total_capital - capital_risky
     rf_cap_limit = max_rf_ratio * total_capital
@@ -70,12 +71,14 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
         capital_risky = total_capital - capital_rf
         y_capped = capital_risky / total_capital
 
+    # 6. Tính toán danh mục hoàn chỉnh
     expected_rc = y_capped * mu_p + (1 - y_capped) * rf
     sigma_c = y_capped * sigma_p
     utility = expected_rc - 0.5 * A * sigma_c**2
 
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
+    # 7. Trả về kết quả
     portfolio_info = {
         'portfolio_name': portfolio_name,
         'mu': mu_p,
