@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -21,7 +20,7 @@ from utils import (
     block_j_stress_testing
 )
 
-# --- Helper functions ---
+# --- Mapping Risk Score to A (Continuous) ---
 def map_risk_score_to_A(score):
     if 10 <= score <= 17:
         return 25 - (score - 10) * (10 / 7)
@@ -32,13 +31,14 @@ def map_risk_score_to_A(score):
     else:
         raise ValueError("Risk score must be between 10 and 40.")
 
+# --- Description for user ---
 def get_risk_profile_description(score):
     if 10 <= score <= 17:
-        return "Low – Capital preservation focus"
+        return "Very Conservative – Capital Preservation Focus"
     elif 18 <= score <= 27:
-        return "Medium – Balanced growth and preservation"
+        return "Moderate – Balanced Growth and Preservation"
     elif 28 <= score <= 40:
-        return "High – Growth focus"
+        return "Aggressive – Growth Focused"
     else:
         return "Undefined"
 
@@ -46,12 +46,12 @@ def get_risk_profile_description(score):
 with open("utils/valid_tickers.txt", "r") as f:
     valid_tickers = sorted([line.strip() for line in f if line.strip()])
 
-# --- Page config ---
+# --- Page Configuration ---
 st.set_page_config(page_title="Portfolio Optimization Platform", layout="wide")
 st.title("Portfolio Optimization Platform")
 st.sidebar.header("Configuration")
 
-# --- Sidebar inputs ---
+# --- Sidebar Inputs ---
 default_tickers = [x for x in ["VNM", "FPT", "MWG", "REE", "VCB"] if x in valid_tickers]
 tickers_user = st.sidebar.multiselect("Stock Tickers", options=valid_tickers, default=default_tickers)
 
@@ -76,7 +76,7 @@ strategy_options = {
 selection_strategy = st.sidebar.selectbox("Factor Selection Strategy", list(strategy_options.keys()))
 run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
-# --- Assign to config ---
+# --- Assign Inputs to Config ---
 config.tickers = tickers_user
 config.benchmark_symbol = benchmark_user
 config.start_date = pd.to_datetime(start_user)
@@ -90,12 +90,12 @@ config.factor_selection_strategy = strategy_options[selection_strategy]
 config.y_min = 0.6
 config.y_max = 0.9
 
-# --- Input Validation ---
+# --- Validation ---
 if not config.tickers or config.benchmark_symbol is None:
     st.error("Please select at least one stock ticker and a benchmark.")
     st.stop()
 
-# --- Pipeline ---
+# --- Pipeline Execution ---
 if run_analysis:
     with st.spinner("Executing portfolio optimization pipeline..."):
         try:
