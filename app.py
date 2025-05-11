@@ -152,6 +152,8 @@ if run_analysis:
                 expected_rc=expected_rc,
                 y_capped=y_capped,
                 y_opt=y_opt,
+                adj_returns_combinations=adj_returns_combinations,
+                cov_matrix_dict=cov_matrix_dict,
                 simulate_for_visual=True
             )
             st.success("H3 – Frontier and CAL Visualized")
