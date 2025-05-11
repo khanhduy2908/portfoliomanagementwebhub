@@ -36,22 +36,19 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         n_simulations = 10000
         np.random.seed(42)
         weights_sim = np.random.dirichlet(np.ones(len(tickers)), size=n_simulations)
-
         mu_sim = weights_sim @ mu_realistic
         sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
         sharpe_sim = (mu_sim - rf) / sigma_sim
 
-        # Filter realistic points
+        # Basic filter
         mask = (sigma_sim > 0.0001) & (mu_sim > 0.0001) & np.isfinite(sharpe_sim)
         mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
 
-        # 🎯 Filter only points near the CAL line
+        # 🎯 Filter only near CAL & remove negative Sharpe
         cal_slope = (mu_p - rf) / sigma_p
         y_cal_sim = rf + cal_slope * sigma_sim
-        cal_filter = np.abs(mu_sim - y_cal_sim) < 0.005  # Adjustable threshold
-        mu_sim = mu_sim[cal_filter]
-        sigma_sim = sigma_sim[cal_filter]
-        sharpe_sim = sharpe_sim[cal_filter]
+        cal_filter = (np.abs(mu_sim - y_cal_sim) < 0.02) & (sharpe_sim > 0)
+        mu_sim, sigma_sim, sharpe_sim = mu_sim[cal_filter], sigma_sim[cal_filter], sharpe_sim[cal_filter]
     else:
         mu_sim, sigma_sim, sharpe_sim = [], [], []
 
@@ -60,14 +57,14 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
 
     # Efficient Frontier
     if simulate_for_visual and len(mu_sim) > 0:
-        sc = ax.scatter(sigma_sim * 100, mu_sim * 100, c=sharpe_sim, cmap='plasma',
-                        s=15, alpha=0.85, edgecolors='none')
+        sc = ax.scatter(sigma_sim * 100, mu_sim * 100, c=sharpe_sim, cmap='viridis',
+                        s=14, alpha=0.85, edgecolors='none')
         cbar = plt.colorbar(sc, ax=ax)
         cbar.set_label("Sharpe Ratio", fontsize=11, color='white')
         cbar.ax.tick_params(labelsize=9, colors='white')
         plt.setp(cbar.ax.get_yticklabels(), color='white')
 
-    # Key Markers
+    # Key markers
     ax.scatter(0, rf * 100, c='blue', s=100, label=f"Risk-Free Rate ({rf * 100:.2f}%)")
     ax.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=180,
                label=f"Optimal Risky Portfolio ({'-'.join(tickers)})")
@@ -82,7 +79,8 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
 
     # CAL line
     slope = (mu_p - rf) / sigma_p
-    x_cal = np.linspace(0, sigma_sim.max() * 100 * 1.3 if len(sigma_sim) > 0 else sigma_p * 150, 200)
+    max_x = sigma_sim.max() * 100 * 1.3 if len(sigma_sim) > 0 else sigma_p * 150
+    x_cal = np.linspace(0, max_x, 200)
     y_cal = rf * 100 + slope * x_cal
     ax.plot(x_cal, y_cal, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
 
