@@ -152,9 +152,6 @@ if run_analysis:
                 expected_rc=expected_rc,
                 y_capped=y_capped,
                 y_opt=y_opt,
-                tickers=hrp_result_dict['tickers'],
-                weights=hrp_result_dict['weights'],
-                cov=hrp_result_dict['cov'],
                 simulate_for_visual=True
             )
             st.success("H3 – Frontier and CAL Visualized")
