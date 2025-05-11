@@ -100,7 +100,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             warnings.warn(f"⚠️ Failed for {combo}: {e}")
             continue
 
-    # Fallback nếu không có kết quả nào hợp lệ
+    # Fallback
     if not hrp_cvar_results:
         if fallback_result:
             warnings.warn("⚠️ Using fallback portfolio due to optimization failure.")
@@ -108,7 +108,37 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
         else:
             raise ValueError("❌ No feasible HRP-CVaR portfolios found.")
 
-    # === Format output ===
+    # === Simulate extra portfolios to enrich visualization ===
+    n_random = 300
+    np.random.seed(2024)
+    for combo in valid_combinations:
+        tickers = list(combo)
+        mu_dict = adj_returns_combinations[combo]
+        cov_df = cov_matrix_dict[combo]
+
+        mu = np.array([mu_dict[t] for t in tickers]) / 100
+        cov = cov_df.loc[tickers, tickers].values
+
+        if np.any(np.linalg.eigvalsh(cov) < -1e-6):
+            continue
+
+        for _ in range(n_random):
+            w_rand = np.random.dirichlet(np.ones(len(tickers)))
+            port_ret = np.dot(mu, w_rand) * 100
+            port_vol = np.sqrt(w_rand.T @ cov @ w_rand) * 100
+            sharpe = (port_ret - benchmark_return_mean * 100) / port_vol if port_vol > 0 else 0
+
+            hrp_cvar_results.append({
+                'Portfolio': "RandomSim",
+                'Expected Return (%)': port_ret,
+                'Volatility (%)': port_vol,
+                'CVaR (%)': None,
+                'Sharpe Ratio': sharpe,
+                'CVaR Exceed?': False,
+                'Weights': dict(zip(tickers, w_rand))
+            })
+
+    # === Final outputs ===
     hrp_df = pd.DataFrame(hrp_cvar_results).sort_values(by='Sharpe Ratio', ascending=False).reset_index(drop=True)
     mu_list = hrp_df['Expected Return (%)'].tolist()
     sigma_list = hrp_df['Volatility (%)'].tolist()
