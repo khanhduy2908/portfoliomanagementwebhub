@@ -14,6 +14,7 @@ from utils import (
     block_h_complete_portfolio,
     block_h1_visualization,
     block_h2_visualization,
+    block_h3_visualization,
     block_i_performance_analysis,
     block_i1_visualization,
     block_i2_visualization,
@@ -31,7 +32,7 @@ def map_risk_score_to_A(score):
     else:
         raise ValueError("Risk score must be between 10 and 40.")
 
-# --- Description for user ---
+# --- Description ---
 def get_risk_profile_description(score):
     if 10 <= score <= 17:
         return "Very Conservative – Capital Preservation Focus"
@@ -46,7 +47,7 @@ def get_risk_profile_description(score):
 with open("utils/valid_tickers.txt", "r") as f:
     valid_tickers = sorted([line.strip() for line in f if line.strip()])
 
-# --- Page Configuration ---
+# --- UI Config ---
 st.set_page_config(page_title="Portfolio Optimization Platform", layout="wide")
 st.title("Portfolio Optimization Platform")
 st.sidebar.header("Configuration")
@@ -76,7 +77,7 @@ strategy_options = {
 selection_strategy = st.sidebar.selectbox("Factor Selection Strategy", list(strategy_options.keys()))
 run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
-# --- Assign Inputs to Config ---
+# --- Assign config ---
 config.tickers = tickers_user
 config.benchmark_symbol = benchmark_user
 config.start_date = pd.to_datetime(start_user)
@@ -95,7 +96,7 @@ if not config.tickers or config.benchmark_symbol is None:
     st.error("Please select at least one stock ticker and a benchmark.")
     st.stop()
 
-# --- Pipeline Execution ---
+# --- Execution Pipeline ---
 if run_analysis:
     with st.spinner("Executing portfolio optimization pipeline..."):
         try:
@@ -132,14 +133,33 @@ if run_analysis:
             )
             st.success("H – Optimal Portfolio Constructed")
 
-            alloc_df = pd.DataFrame({
-                "Ticker": list(capital_alloc.keys())
-            })
             block_h1_visualization.display_portfolio_info(portfolio_info)
             st.success("H1 – Portfolio Summary Displayed")
 
             block_h2_visualization.run(capital_alloc, portfolio_info['capital_rf'], portfolio_info['capital_risky'], tickers_portfolio)
             st.success("H2 – Allocation Visualized")
+
+            if isinstance(returns_benchmark.index, pd.PeriodIndex):
+                returns_benchmark.index = returns_benchmark.index.to_timestamp()
+
+            benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
+            block_h3_visualization.run(
+                hrp_result_dict=hrp_result_dict,
+                benchmark_return_mean=benchmark_return_mean,
+                results_ef=results_ef,
+                best_portfolio=best_portfolio,
+                mu_p=mu_p,
+                sigma_p=sigma_p,
+                rf=config.rf,
+                sigma_c=sigma_c,
+                expected_rc=expected_rc,
+                y_capped=y_capped,
+                y_opt=y_opt,
+                tickers=tickers_portfolio,
+                weights=weights,
+                cov=cov
+            )
+            st.success("H3 – Frontier and CAL Visualized")
 
             block_i_performance_analysis.run(
                 best_portfolio, returns_pivot_stocks, returns_benchmark,
