@@ -1,75 +1,74 @@
 # utils/block_h3_visualization.py
 
-import streamlit as st
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+import streamlit as st
 
-def run(hrp_result_dict, benchmark_return_mean, best_portfolio,
-        mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt,
-        tickers, weights, cov):
+def simulate_portfolios(mu, cov, rf, n_simulations=3000, seed=42):
+    np.random.seed(seed)
+    n_assets = len(mu)
+    sim_returns, sim_risks, sim_sharpes = [], [], []
 
-    st.markdown("### Efficient Frontier and Capital Allocation Line (CAL)")
+    for _ in range(n_simulations):
+        weights = np.random.dirichlet(np.ones(n_assets))
+        perturbed_mu = mu + np.random.normal(0, 0.002, size=n_assets)
 
-    # === Simulate 1000 Random Portfolios ===
-    n_sim = 1000
-    np.random.seed(42)
-    weights_random = np.random.dirichlet(np.ones(len(tickers)), n_sim)
-    mu_vec = np.array([mu_p] * len(tickers))  # Optional, or adjust with actual vector
-    returns = []
-    risks = []
-    sharpes = []
+        port_return = np.dot(weights, perturbed_mu)
+        port_volatility = np.sqrt(weights.T @ cov @ weights)
+        sharpe = (port_return - rf) / port_volatility if port_volatility > 0 else 0
 
-    for w in weights_random:
-        mu_port = np.dot(w, mu_vec)
-        sigma_port = np.sqrt(np.dot(w.T, np.dot(cov, w)))
-        sharpe = (mu_port - rf) / sigma_port if sigma_port > 0 else 0
-        returns.append(mu_port * 100)
-        risks.append(sigma_port * 100)
-        sharpes.append(sharpe)
+        sim_returns.append(port_return * 100)
+        sim_risks.append(port_volatility * 100)
+        sim_sharpes.append(sharpe)
 
-    returns = np.array(returns)
-    risks = np.array(risks)
-    sharpes = np.array(sharpes)
+    return np.array(sim_risks), np.array(sim_returns), np.array(sim_sharpes)
 
-    # === Begin Plot ===
-    fig, ax = plt.subplots(figsize=(10, 7), facecolor='#121212')
+def run(mu, cov, rf, mu_p, sigma_p, sigma_c, expected_rc, y_capped, y_opt):
+    st.markdown("### Efficient Frontier with Capital Allocation Line (CAL)")
 
-    sc = ax.scatter(risks, returns, c=sharpes, cmap='plasma', s=20,
-                    edgecolors='none', alpha=0.9)
+    # 1. Simulate portfolios
+    sigma_list, mu_list, sharpe_list = simulate_portfolios(mu, cov, rf)
 
-    cbar = plt.colorbar(sc, ax=ax)
-    cbar.set_label('Sharpe Ratio', color='white')
+    fig, ax = plt.subplots(figsize=(10, 7), facecolor="#121212")
+    scatter = ax.scatter(
+        sigma_list, mu_list, c=sharpe_list, cmap='plasma',
+        s=8, alpha=0.8, edgecolors='none'
+    )
+
+    # 2. Colorbar
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label("Sharpe Ratio", color='white')
     cbar.ax.yaxis.set_tick_params(color='white')
     plt.setp(cbar.ax.get_yticklabels(), color='white')
 
-    # === Capital Allocation Line (CAL) ===
+    # 3. Risk-free rate
+    ax.scatter(0, rf * 100, c='blue', s=100, marker='o', label=f"Risk-Free Rate ({rf*100:.2f}%)")
+
+    # 4. Optimal risky portfolio
+    ax.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=250, label="Optimal Risky Portfolio")
+
+    # 5. Capital Allocation Line
     slope = (mu_p - rf) / sigma_p
-    x_cal = np.linspace(0, risks.max() * 1.2, 100)
-    y_cal = rf + slope * (x_cal / 100)
-    ax.plot(x_cal, y_cal * 100, 'r--', linewidth=2, label='Capital Allocation Line (CAL)')
+    x_cal = np.linspace(0, max(sigma_list.max(), sigma_p * 1.6), 100)
+    y_cal = rf + slope * x_cal
+    ax.plot(x_cal, y_cal * 100, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
 
-    # === Risk-Free Point ===
-    ax.scatter(0, rf * 100, color='blue', s=100, marker='o', label=f"Risk-Free Rate ({rf*100:.2f}%)")
-
-    # === Optimal Risky Portfolio ===
-    ax.scatter(sigma_p * 100, mu_p * 100, color='red', marker='*', s=180,
-               label=f"Optimal Risky Portfolio")
-
-    # === Complete Portfolio ===
-    ax.scatter(sigma_c * 100, expected_rc * 100, color='lime', marker='D', s=160,
+    # 6. Complete Portfolio (y_capped)
+    ax.scatter(sigma_c * 100, expected_rc * 100, c='lime', marker='D', s=180,
                label=f"Complete Portfolio (y = {y_capped:.2f})")
 
-    # === Optional: Leveraged Portfolio if y_opt > y_capped ===
+    # 7. Leveraged Portfolio (y_opt if y_opt > y_capped)
     if abs(y_opt - y_capped) > 1e-3:
-        sigma_leveraged = y_opt * sigma_p
-        mu_leveraged = y_opt * mu_p + (1 - y_opt) * rf
-        ax.scatter(sigma_leveraged * 100, mu_leveraged * 100, color='magenta',
-                   marker='X', s=150, label=f"Leveraged Portfolio (y = {y_opt:.2f})")
+        sigma_leverage = y_opt * sigma_p
+        mu_leverage = y_opt * mu_p + (1 - y_opt) * rf
+        ax.scatter(sigma_leverage * 100, mu_leverage * 100,
+                   c='magenta', marker='X', s=180,
+                   label=f"Leveraged Portfolio (y = {y_opt:.2f})")
 
-    # === Final Formatting ===
+    # 8. Aesthetic
     ax.set_facecolor('#121212')
     fig.patch.set_facecolor('#121212')
-    ax.set_title("Efficient Frontier with CAL and Optimal Portfolios", color='white')
+    ax.set_title("Efficient Frontier with CAL and Optimal Portfolios", color='white', fontsize=14)
     ax.set_xlabel("Volatility (%)", color='white')
     ax.set_ylabel("Expected Return (%)", color='white')
     ax.tick_params(colors='white')
