@@ -9,36 +9,46 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
 
     st.markdown("### Efficient Frontier with CAL and Optimal Portfolios")
 
-    # === Step 1: Fallback & validation ===
+    # === Debug Keys ===
+    st.write("🧪 Debug best_portfolio keys:", list(best_portfolio.keys()))
+
+    # === Fallback nếu thiếu ===
     if tickers is None:
-        tickers = best_portfolio.get('tickers', [])
+        tickers = best_portfolio.get("tickers", None)
     if weights is None:
-        weights = best_portfolio.get('weights', [])
+        weights = best_portfolio.get("weights", None)
     if cov is None:
-        cov = best_portfolio.get('cov', None)
+        cov = best_portfolio.get("cov", None)
 
-    if not tickers or not weights or cov is None:
-        st.warning("⚠️ Insufficient data to simulate efficient frontier. Please check Block G output.")
-        return
+    if tickers is None or weights is None or cov is None:
+        st.error("❌ Missing required keys: 'tickers', 'weights', or 'cov' in best_portfolio.")
+        st.stop()
 
-    mu_realistic = np.array(best_portfolio.get('mu', [mu_p / len(tickers)] * len(tickers)))
-
-    # === Step 2: Simulate random portfolios ===
-    if simulate_for_visual:
-        n_simulations = 10000
-        np.random.seed(42)
-        weights_sim = np.random.dirichlet(np.ones(len(tickers)), size=n_simulations)
-
-        mu_sim = weights_sim @ mu_realistic
-        sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
-        sharpe_sim = (mu_sim - rf) / sigma_sim
-
-        mask = (sigma_sim > 0.0001) & (mu_sim > 0.0001) & np.isfinite(sharpe_sim)
-        mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
+    if "mu" in best_portfolio:
+        mu_realistic = np.array(best_portfolio["mu"])
     else:
-        mu_sim, sigma_sim, sharpe_sim = [], [], []
+        mu_realistic = np.array([mu_p / len(tickers)] * len(tickers))
+        st.warning("⚠️ 'mu' not found in best_portfolio. Using equal-weight proxy.")
 
-    # === Step 3: Plot ===
+    # === Simulate Efficient Frontier ===
+    if simulate_for_visual:
+        try:
+            n_simulations = 10000
+            np.random.seed(42)
+            weights_sim = np.random.dirichlet(np.ones(len(tickers)), size=n_simulations)
+
+            mu_sim = weights_sim @ mu_realistic
+            sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
+            sharpe_sim = (mu_sim - rf) / sigma_sim
+
+            mask = (sigma_sim > 0.0001) & (mu_sim > 0.0001) & np.isfinite(sharpe_sim)
+            mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
+        except Exception as e:
+            st.warning(f"⚠️ Simulation failed: {e}")
+            simulate_for_visual = False
+            mu_sim, sigma_sim, sharpe_sim = [], [], []
+
+    # === Plot ===
     fig, ax = plt.subplots(figsize=(10, 7), facecolor="#121212")
 
     if simulate_for_visual and len(mu_sim) > 0:
@@ -49,7 +59,7 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         cbar.ax.yaxis.set_tick_params(color='white')
         plt.setp(cbar.ax.get_yticklabels(), color='white')
 
-    # === Step 4: Plot key points ===
+    # Portfolio markers
     ax.scatter(0, rf * 100, c='blue', s=100, label=f"Risk-Free Rate ({rf * 100:.2f}%)")
     ax.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=180, label="Optimal Risky Portfolio")
     ax.scatter(sigma_c * 100, expected_rc * 100, c='lime', marker='D', s=150,
@@ -61,14 +71,14 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         ax.scatter(sigma_uncapped * 100, rc_uncapped * 100, c='magenta', marker='X', s=140,
                    label=f"Leveraged Portfolio (y = {y_opt:.2f})")
 
-    # === Step 5: CAL Line ===
+    # CAL
     slope = (mu_p - rf) / sigma_p
     max_x = max(sigma_sim.max() if len(sigma_sim) > 0 else sigma_p * 1.5, sigma_p * 1.5)
     x_cal = np.linspace(0, max_x, 100)
     y_cal = rf + slope * x_cal
     ax.plot(x_cal * 100, y_cal * 100, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
 
-    # === Step 6: Styling ===
+    # Styling
     ax.set_facecolor("#121212")
     fig.patch.set_facecolor("#121212")
     ax.set_title("Efficient Frontier with CAL and Optimal Portfolios", color='white')
