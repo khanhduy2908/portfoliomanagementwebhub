@@ -146,7 +146,6 @@ if run_analysis:
             block_h3_visualization.run(
                 hrp_result_dict=hrp_result_dict,
                 benchmark_return_mean=benchmark_return_mean,
-                results_ef=results_ef,
                 best_portfolio=best_portfolio,
                 mu_p=mu_p,
                 sigma_p=sigma_p,
