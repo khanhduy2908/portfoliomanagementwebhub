@@ -40,8 +40,8 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
         sharpe_sim = (mu_sim - rf) / sigma_sim
 
-        # Filter: valid values + Sharpe > 0
-        mask = (sigma_sim > 0.0001) & (mu_sim > 0.0001) & np.isfinite(sharpe_sim) & (sharpe_sim > 0)
+        # Filter: valid values (no Sharpe > 0 filter!)
+        mask = (sigma_sim > 0.0001) & (mu_sim > 0.0001) & np.isfinite(sharpe_sim)
         mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
     else:
         mu_sim, sigma_sim, sharpe_sim = [], [], []
@@ -50,7 +50,7 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
     fig, ax = plt.subplots(figsize=(10, 7), dpi=100, facecolor="#121212")
 
     if simulate_for_visual and len(mu_sim) > 0:
-        sc = ax.scatter(sigma_sim * 100, mu_sim * 100, c=sharpe_sim, cmap='viridis',
+        sc = ax.scatter(sigma_sim * 100, mu_sim * 100, c=sharpe_sim, cmap='plasma',
                         s=14, alpha=0.85, edgecolors='none')
         cbar = plt.colorbar(sc, ax=ax)
         cbar.set_label("Sharpe Ratio", fontsize=11, color='white')
