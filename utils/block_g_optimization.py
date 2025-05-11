@@ -16,22 +16,22 @@ def corr_to_dist(corr):
     return np.sqrt(0.5 * (1 - corr))
 
 def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark,
-        alpha_cvar=0.95, lambda_cvar=5, beta_l2=0.01, cvar_soft_limit=6.5,
-        n_simulations=15000, n_random=300):
+        alpha_cvar=0.95, lambda_cvar=5, beta_l2=0.01, cvar_soft_limit=6.5, n_simulations=15000):
 
     benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
-    hrp_cvar_results = []
-    solvers = ['SCS', 'ECOS']
+    real_portfolios = []
     fallback_result = None
+    solvers = ['SCS', 'ECOS']
 
+    # === 1. Danh mục tối ưu hóa thực tế ===
     for combo in valid_combinations:
         tickers = list(combo)
         try:
             mu_dict = adj_returns_combinations[combo]
             cov_df = cov_matrix_dict[combo]
+
             mu = np.array([mu_dict[t] for t in tickers]) / 100
             cov = cov_df.loc[tickers, tickers].values
-
             if np.any(np.linalg.eigvalsh(cov) < -1e-6):
                 continue
 
@@ -39,10 +39,11 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
             dist = corr_to_dist(corr)
             Z = linkage(squareform(dist, checks=False), method='ward')
 
-            for seed in range(5):
+            for seed in range(3):  # Multiple clustering seeds
                 np.random.seed(seed)
                 clusters = fcluster(Z, t=len(tickers), criterion='maxclust')
                 order = np.argsort(clusters + np.random.rand(len(clusters)) * 0.01)
+
                 mu_ord = mu[order]
                 cov_ord = cov[np.ix_(order, order)]
                 tickers_ord = [tickers[i] for i in order]
@@ -53,6 +54,7 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                 w = cp.Variable(len(tickers))
                 VaR = cp.Variable()
                 z = cp.Variable(n_simulations)
+
                 port_loss = losses @ w
                 cvar = VaR + cp.sum(z) / ((1 - alpha_cvar) * n_simulations)
                 objective = cp.Maximize(mu_ord @ w - lambda_cvar * cvar - beta_l2 * cp.sum_squares(w))
@@ -87,61 +89,57 @@ def run(valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_b
                     'Volatility (%)': port_vol,
                     'CVaR (%)': final_cvar,
                     'Sharpe Ratio': sharpe,
-                    'CVaR Exceed?': final_cvar > cvar_soft_limit,
                     'Weights': dict(zip(tickers_ord, w_opt))
                 }
-                hrp_cvar_results.append(result)
+                real_portfolios.append(result)
 
-                if fallback_result is None or result['Sharpe Ratio'] > fallback_result['Sharpe Ratio']:
+                if fallback_result is None or sharpe > fallback_result['Sharpe Ratio']:
                     fallback_result = result
 
         except Exception as e:
-            warnings.warn(f"⚠️ Failed for {combo}: {e}")
+            warnings.warn(f"⚠️ Optimization failed for combo {combo}: {e}")
             continue
 
-    if not hrp_cvar_results and fallback_result:
-        hrp_cvar_results.append(fallback_result)
-    elif not hrp_cvar_results:
-        raise ValueError("❌ No feasible HRP-CVaR portfolios found.")
-
-    # === Simulated portfolios to create visible gradient ===
-    np.random.seed(2024)
+    # === 2. Thêm danh mục mô phỏng cho gradient visualization ===
+    simulated_portfolios = []
+    np.random.seed(2025)
     for combo in valid_combinations:
         tickers = list(combo)
         mu_dict = adj_returns_combinations[combo]
         cov_df = cov_matrix_dict[combo]
+
         mu = np.array([mu_dict[t] for t in tickers]) / 100
         cov = cov_df.loc[tickers, tickers].values
         if np.any(np.linalg.eigvalsh(cov) < -1e-6):
             continue
 
-        for _ in range(n_random):
-            weights = np.random.dirichlet(np.ones(len(tickers)))
-            port_ret = np.dot(mu, weights) * 100
-            port_vol = np.sqrt(weights.T @ cov @ weights) * 100
+        for _ in range(250):  # Số lượng danh mục mô phỏng
+            w_rand = np.random.dirichlet(np.ones(len(tickers)))
+            port_ret = np.dot(mu, w_rand) * 100
+            port_vol = np.sqrt(w_rand.T @ cov @ w_rand) * 100
             sharpe = (port_ret - benchmark_return_mean * 100) / port_vol if port_vol > 0 else 0
 
-            hrp_cvar_results.append({
-                'Portfolio': "Simulated",
+            simulated_portfolios.append({
+                'Portfolio': 'Simulated',
                 'Expected Return (%)': port_ret,
                 'Volatility (%)': port_vol,
-                'CVaR (%)': None,
-                'Sharpe Ratio': sharpe,
-                'CVaR Exceed?': False,
-                'Weights': dict(zip(tickers, weights))
+                'Sharpe Ratio': sharpe
             })
 
-    # === Final Outputs ===
-    hrp_df = pd.DataFrame(hrp_cvar_results).sort_values(by='Sharpe Ratio', ascending=False).reset_index(drop=True)
-    mu_list = hrp_df['Expected Return (%)'].tolist()
-    sigma_list = hrp_df['Volatility (%)'].tolist()
-    sharpe_list = hrp_df['Sharpe Ratio'].tolist()
+    # === 3. Combine for visualization ===
+    df_real = pd.DataFrame(real_portfolios)
+    df_sim = pd.DataFrame(simulated_portfolios)
+    df_all = pd.concat([df_real, df_sim], ignore_index=True)
+
+    mu_list = df_all['Expected Return (%)'].tolist()
+    sigma_list = df_all['Volatility (%)'].tolist()
+    sharpe_list = df_all['Sharpe Ratio'].tolist()
 
     results_ef = (mu_list, sigma_list, sharpe_list)
-    hrp_result_dict = {
-        tuple(res['Portfolio'].split("-")): res
-        for _, res in hrp_df.iterrows()
-        if res['Portfolio'] != "Simulated"
-    }
+    hrp_result_dict = {tuple(row['Portfolio'].split("-")): row for _, row in df_real.iterrows()}
+
+    # Fallback nếu không có portfolio thực nào
+    if not hrp_result_dict and fallback_result:
+        hrp_result_dict[tuple(fallback_result['Portfolio'].split("-"))] = fallback_result
 
     return hrp_result_dict, results_ef
