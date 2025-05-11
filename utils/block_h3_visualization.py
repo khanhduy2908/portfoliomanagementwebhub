@@ -1,68 +1,69 @@
 # utils/block_h3_visualization.py
 
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 import streamlit as st
 
-def run(
-    best_portfolio, rf, mu_p, sigma_p, y_opt, y_capped, sigma_c, expected_rc,
-    mu_sim=None, sigma_sim=None, sharpe_sim=None
-):
+def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt, tickers, weights, cov):
     st.markdown("### Efficient Frontier with CAL and Optimal Portfolios")
 
-    fig, ax = plt.subplots(figsize=(10, 7), facecolor="#121212")
+    # === 1. Chuẩn bị thông số danh mục ===
+    weights = np.array(weights)
+    mu_vec = mu_p * np.ones_like(weights)
+    cov_matrix = np.array(cov)
 
-    # === 1. Plot simulated portfolios if provided ===
-    if mu_sim is not None and sigma_sim is not None and sharpe_sim is not None:
-        mu_sim = np.array(mu_sim)
-        sigma_sim = np.array(sigma_sim)
-        sharpe_sim = np.array(sharpe_sim)
+    # === 2. Mô phỏng danh mục ngẫu nhiên từ tổ hợp cổ phiếu thực tế ===
+    n_portfolios = 3000
+    np.random.seed(42)
+    random_weights = np.random.dirichlet(np.ones(len(weights)), size=n_portfolios)
 
-        mask = (~np.isnan(mu_sim)) & (~np.isnan(sigma_sim)) & (~np.isnan(sharpe_sim))
-        mu_sim = mu_sim[mask]
-        sigma_sim = sigma_sim[mask]
-        sharpe_sim = sharpe_sim[mask]
+    port_returns = random_weights @ mu_vec
+    port_vols = np.sqrt(np.sum(random_weights @ cov_matrix * random_weights, axis=1))
+    sharpe_ratios = (port_returns - rf) / port_vols
 
-        scatter = ax.scatter(
-            sigma_sim, mu_sim,
-            c=sharpe_sim,
-            cmap="viridis",
-            edgecolors='none',
-            s=10,
-            alpha=0.9
-        )
-        cbar = plt.colorbar(scatter, ax=ax)
-        cbar.set_label("Sharpe Ratio", color="white")
-        cbar.ax.yaxis.set_tick_params(color='white')
-        plt.setp(cbar.ax.get_yticklabels(), color='white')
+    # === 3. Vẽ biểu đồ ===
+    fig, ax = plt.subplots(figsize=(10, 7), facecolor='#121212')
 
-    # === 2. Plot key points ===
-    ax.scatter(0, rf * 100, c='blue', s=100, marker='o', label=f"Risk-Free Rate ({rf*100:.2f}%)")
-    ax.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=200, label="Optimal Risky Portfolio")
-    ax.scatter(sigma_c * 100, expected_rc * 100, c='lime', marker='D', s=150,
-               label=f"Complete Portfolio (y = {y_capped:.2f})")
+    scatter = ax.scatter(
+        port_vols * 100, port_returns * 100,
+        c=sharpe_ratios,
+        cmap='viridis',
+        alpha=0.9,
+        s=12,
+        edgecolors='none'
+    )
 
+    # Colorbar
+    cbar = fig.colorbar(scatter, ax=ax)
+    cbar.set_label("Sharpe Ratio", color='white')
+    cbar.ax.yaxis.set_tick_params(color='white')
+    plt.setp(cbar.ax.get_yticklabels(), color='white')
+
+    # === 4. Vẽ các điểm đặc biệt ===
+    ax.scatter(0, rf * 100, c='blue', s=80, marker='o', label=f"Risk-Free Rate ({rf*100:.2f}%)")
+    ax.scatter(sigma_p * 100, mu_p * 100, c='red', s=130, marker='*', label="Optimal Risky Portfolio")
+    ax.scatter(sigma_c * 100, expected_rc * 100, c='lime', s=100, marker='D', label=f"Complete Portfolio (y = {y_capped:.2f})")
+
+    # Nếu có đòn bẩy thì vẽ thêm
     if abs(y_opt - y_capped) > 1e-3:
-        sigma_leverage = y_opt * sigma_p
-        mu_leverage = y_opt * mu_p + (1 - y_opt) * rf
-        ax.scatter(sigma_leverage * 100, mu_leverage * 100,
-                   c='magenta', marker='X', s=150,
-                   label=f"Leveraged Portfolio (y = {y_opt:.2f})")
+        sigma_lvg = y_opt * sigma_p
+        mu_lvg = y_opt * mu_p + (1 - y_opt) * rf
+        ax.scatter(sigma_lvg * 100, mu_lvg * 100, c='magenta', s=100, marker='X', label=f"Leveraged Portfolio (y = {y_opt:.2f})")
 
-    # === 3. Capital Allocation Line ===
+    # === 5. Vẽ CAL ===
     slope = (mu_p - rf) / sigma_p
-    x_vals = np.linspace(0, max(sigma_p * 1.5, sigma_sim.max() * 1.1 if sigma_sim is not None else 0.3), 100)
-    y_vals = rf + slope * x_vals
-    ax.plot(x_vals * 100, y_vals * 100, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
+    x_cal = np.linspace(0, (port_vols.max() + sigma_p * 0.5), 100)
+    y_cal = rf + slope * x_cal
+    ax.plot(x_cal * 100, y_cal * 100, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
 
-    # === 4. Styling ===
-    ax.set_facecolor("#121212")
-    fig.patch.set_facecolor("#121212")
+    # === 6. Thẩm mỹ ===
+    ax.set_facecolor('#121212')
+    fig.patch.set_facecolor('#121212')
     ax.set_title("Efficient Frontier with CAL and Optimal Portfolios", color='white', fontsize=14)
     ax.set_xlabel("Volatility (%)", color='white')
     ax.set_ylabel("Expected Return (%)", color='white')
     ax.tick_params(colors='white')
-    ax.legend(facecolor='#1e1e1e', labelcolor='white', fontsize=9, loc='upper left')
+    ax.legend(facecolor='#1e1e1e', labelcolor='white', fontsize=9)
     ax.grid(False)
 
     st.pyplot(fig)
