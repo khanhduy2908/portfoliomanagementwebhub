@@ -9,28 +9,25 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
 
     st.markdown("### Efficient Frontier with CAL and Optimal Portfolios")
 
-    # === Debug Keys ===
-    st.write("🧪 Debug best_portfolio keys:", list(best_portfolio.keys()))
+    # === Step 1: Extract best portfolio details from dict ===
+    if isinstance(best_portfolio, dict):
+        try:
+            # Chọn danh mục đầu tiên (vì bạn dùng fallback đã là danh mục tốt nhất)
+            key = list(best_portfolio.keys())[0]
+            result = best_portfolio[key]
 
-    # === Fallback nếu thiếu ===
-    if tickers is None:
-        tickers = best_portfolio.get("tickers", None)
-    if weights is None:
-        weights = best_portfolio.get("weights", None)
-    if cov is None:
-        cov = best_portfolio.get("cov", None)
-
-    if tickers is None or weights is None or cov is None:
-        st.error("❌ Missing required keys: 'tickers', 'weights', or 'cov' in best_portfolio.")
-        st.stop()
-
-    if "mu" in best_portfolio:
-        mu_realistic = np.array(best_portfolio["mu"])
+            tickers = list(key)
+            weights = np.array([result['Weights'][t] for t in tickers])
+            mu_realistic = np.array([result['Expected Return (%)'] / 100] * len(tickers))
+            cov = np.outer(weights, weights) * ((result['Volatility (%)'] / 100) ** 2)
+        except Exception as e:
+            st.error(f"❌ Failed to extract best portfolio: {e}")
+            return
     else:
-        mu_realistic = np.array([mu_p / len(tickers)] * len(tickers))
-        st.warning("⚠️ 'mu' not found in best_portfolio. Using equal-weight proxy.")
+        st.error("❌ best_portfolio is not in expected dictionary format.")
+        return
 
-    # === Simulate Efficient Frontier ===
+    # === Step 2: Simulate efficient frontier ===
     if simulate_for_visual:
         try:
             n_simulations = 10000
@@ -45,10 +42,11 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
             mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
         except Exception as e:
             st.warning(f"⚠️ Simulation failed: {e}")
-            simulate_for_visual = False
             mu_sim, sigma_sim, sharpe_sim = [], [], []
+    else:
+        mu_sim, sigma_sim, sharpe_sim = [], [], []
 
-    # === Plot ===
+    # === Step 3: Plot ===
     fig, ax = plt.subplots(figsize=(10, 7), facecolor="#121212")
 
     if simulate_for_visual and len(mu_sim) > 0:
@@ -59,7 +57,6 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         cbar.ax.yaxis.set_tick_params(color='white')
         plt.setp(cbar.ax.get_yticklabels(), color='white')
 
-    # Portfolio markers
     ax.scatter(0, rf * 100, c='blue', s=100, label=f"Risk-Free Rate ({rf * 100:.2f}%)")
     ax.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=180, label="Optimal Risky Portfolio")
     ax.scatter(sigma_c * 100, expected_rc * 100, c='lime', marker='D', s=150,
@@ -71,14 +68,11 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         ax.scatter(sigma_uncapped * 100, rc_uncapped * 100, c='magenta', marker='X', s=140,
                    label=f"Leveraged Portfolio (y = {y_opt:.2f})")
 
-    # CAL
     slope = (mu_p - rf) / sigma_p
-    max_x = max(sigma_sim.max() if len(sigma_sim) > 0 else sigma_p * 1.5, sigma_p * 1.5)
-    x_cal = np.linspace(0, max_x, 100)
+    x_cal = np.linspace(0, max(sigma_sim.max() if len(sigma_sim) > 0 else sigma_p * 1.5, sigma_p * 1.5), 100)
     y_cal = rf + slope * x_cal
     ax.plot(x_cal * 100, y_cal * 100, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
 
-    # Styling
     ax.set_facecolor("#121212")
     fig.patch.set_facecolor("#121212")
     ax.set_title("Efficient Frontier with CAL and Optimal Portfolios", color='white')
