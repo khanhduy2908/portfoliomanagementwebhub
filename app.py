@@ -143,21 +143,7 @@ if run_analysis:
                 returns_benchmark.index = returns_benchmark.index.to_timestamp()
 
             benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
-            block_h3_visualization.run(
-                hrp_result_dict=hrp_result_dict,
-                benchmark_return_mean=benchmark_return_mean,
-                best_portfolio=best_portfolio,
-                mu_p=mu_p,
-                sigma_p=sigma_p,
-                rf=config.rf,
-                sigma_c=sigma_c,
-                expected_rc=expected_rc,
-                y_capped=y_capped,
-                y_opt=y_opt,
-                tickers=tickers_portfolio,
-                weights=weights,
-                cov=cov
-            )
+            block_h3_visualization.run(mu=mu, cov=cov, rf=config.rf, mu_p=mu_p, sigma_p=sigma_p, sigma_c=sigma_c, expected_rc=expected_rc, y_capped=y_capped, y_opt=y_opt)
             st.success("H3 – Frontier and CAL Visualized")
 
             block_i_performance_analysis.run(
