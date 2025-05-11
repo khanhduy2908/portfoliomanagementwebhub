@@ -40,22 +40,15 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
         sharpe_sim = (mu_sim - rf) / sigma_sim
 
-        # Basic filter
-        mask = (sigma_sim > 0.0001) & (mu_sim > 0.0001) & np.isfinite(sharpe_sim)
+        # Filter: valid values + Sharpe > 0
+        mask = (sigma_sim > 0.0001) & (mu_sim > 0.0001) & np.isfinite(sharpe_sim) & (sharpe_sim > 0)
         mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
-
-        # 🎯 Filter only near CAL & remove negative Sharpe
-        cal_slope = (mu_p - rf) / sigma_p
-        y_cal_sim = rf + cal_slope * sigma_sim
-        cal_filter = (np.abs(mu_sim - y_cal_sim) < 0.02) & (sharpe_sim > 0)
-        mu_sim, sigma_sim, sharpe_sim = mu_sim[cal_filter], sigma_sim[cal_filter], sharpe_sim[cal_filter]
     else:
         mu_sim, sigma_sim, sharpe_sim = [], [], []
 
     # === Step 3: Plot ===
     fig, ax = plt.subplots(figsize=(10, 7), dpi=100, facecolor="#121212")
 
-    # Efficient Frontier
     if simulate_for_visual and len(mu_sim) > 0:
         sc = ax.scatter(sigma_sim * 100, mu_sim * 100, c=sharpe_sim, cmap='viridis',
                         s=14, alpha=0.85, edgecolors='none')
@@ -64,7 +57,7 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         cbar.ax.tick_params(labelsize=9, colors='white')
         plt.setp(cbar.ax.get_yticklabels(), color='white')
 
-    # Key markers
+    # Key portfolio points
     ax.scatter(0, rf * 100, c='blue', s=100, label=f"Risk-Free Rate ({rf * 100:.2f}%)")
     ax.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=180,
                label=f"Optimal Risky Portfolio ({'-'.join(tickers)})")
