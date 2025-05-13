@@ -52,7 +52,7 @@ st.set_page_config(page_title="Portfolio Optimization Platform", layout="wide")
 st.title("Portfolio Optimization Platform")
 st.sidebar.header("Configuration")
 
-tickers_user = st.sidebar.multiselect("Stock Tickers", options=valid_tickers, default=["VNM", "FPT", "MWG", "REE", "VCB"])
+tickers_user = st.sidebar.multiselect("Stock Tickers", options=valid_tickers, default=["HAH", "TCB", "DGC", "MWG", "POW"])
 benchmark_user = st.sidebar.selectbox("Benchmark Index", options=valid_tickers, index=valid_tickers.index("VNINDEX") if "VNINDEX" in valid_tickers else 0)
 start_user = st.sidebar.date_input("Start Date", value=datetime.date(2020, 1, 1))
 end_user = st.sidebar.date_input("End Date", value=datetime.date.today())
