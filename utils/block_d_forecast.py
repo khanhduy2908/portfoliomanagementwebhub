@@ -24,10 +24,15 @@ def engineer_features(df, ticker_id):
     df = df.sort_values('time').copy()
     df['Return_Close'] = df['Close'].pct_change() * 100
     df['Return_Volume'] = df['Volume'].pct_change() * 100
-    df['Spread_HL'] = (df['High'] - df['Low']) / df['Low'] * 100
+    df['Spread_HL'] = (df['High'] - df['Low']) / df['Low'].replace(0, np.nan) * 100
     df['Volatility_Close'] = df['Close'].rolling(window=3).std()
     df['Ticker_Encoded'] = ticker_id
+
+    # Clean abnormal values
+    df = df.replace([np.inf, -np.inf], np.nan)
     df.dropna(inplace=True)
+    df = df[(df['Return_Close'].abs() < 500) & (df['Return_Volume'].abs() < 500)]
+
     return df
 
 def construct_dataset(df_combo, subset):
@@ -77,7 +82,7 @@ def train_stacked_model(X, y, n_folds=5):
                 )]
             )
             oof_preds_tab.append(model_tab.predict(X_valid).squeeze())
-        except Exception as e:
+        except Exception:
             model_tab = None
             oof_preds_tab.append(np.zeros_like(y_valid))
 
@@ -138,6 +143,10 @@ def run(data_stocks, selected_tickers, selected_combinations):
             warnings.warn(f"⚠️ Skipped {subset}: insufficient samples.")
             continue
 
+        if not np.all(np.isfinite(X_raw)) or not np.all(np.isfinite(y)):
+            warnings.warn(f"⚠️ Skipped {subset}: data contains NaN or Inf.")
+            continue
+
         scaler = StandardScaler()
         X = scaler.fit_transform(X_raw)
         base_models, meta_model = train_stacked_model(X, y)
@@ -154,6 +163,7 @@ def run(data_stocks, selected_tickers, selected_combinations):
             for lag in reversed(range(lookback)):
                 for col in feature_cols:
                     X_last.append(df_last[col].iloc[lag])
+
             X_last = scaler.transform([X_last])
 
             pred_lgb = base_models[-1][0].predict(X_last)
