@@ -1,9 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize_scalar
 
-# --- Tính tỷ lệ risk-free theo khẩu vị rủi ro và mức độ ngại rủi ro A ---
 def get_max_rf_ratio(score, A):
-    # Hard cap theo risk_score
     if 10 <= score <= 17:
         hard_cap = 0.40
     elif 18 <= score <= 27:
@@ -13,46 +11,47 @@ def get_max_rf_ratio(score, A):
     else:
         raise ValueError("Risk score must be between 10 and 40.")
 
-    # Tính tỷ lệ đề xuất theo A liên tục (mượt)
     if A >= 25:
         suggested = 0.40
     elif A <= 2:
         suggested = 0.02
     else:
-        suggested = 0.02 + (A - 2) * ((0.40 - 0.02) / (25 - 2))  # Nội suy tuyến tính
+        suggested = 0.02 + (A - 2) * ((0.40 - 0.02) / (25 - 2))
 
     return min(hard_cap, suggested)
 
-# --- Hàm chính: Tối ưu hóa phân bổ danh mục hoàn chỉnh ---
 def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
-        rf, A, total_capital, risk_score, y_min=0.6, y_max=0.9):
+        rf, A, total_capital, risk_score,
+        alloc_cash, alloc_bond, alloc_stock,
+        y_min=0.6, y_max=0.9):
 
     if not hrp_result_dict:
-        raise ValueError("No valid HRP-CVaR portfolios found.")
+        raise ValueError("❌ No valid HRP-CVaR portfolios found.")
 
-    # 1. Chọn danh mục tối ưu theo Sharpe Ratio
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
     tickers = list(best_portfolio['Weights'].keys())
     weights = np.array([best_portfolio['Weights'][t] for t in tickers])
     weights /= weights.sum()
 
-    # 2. Tính mu và sigma
     mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
     cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
     sigma_p = np.sqrt(weights.T @ cov @ weights)
     mu_p = weights @ mu
 
     if mu_p <= 0 or sigma_p <= 0:
-        raise ValueError("Selected portfolio has non-positive return or volatility.")
+        raise ValueError("❌ Risky portfolio has invalid return or volatility.")
 
-    # 3. Giới hạn tỷ lệ risk-free
+    # Only apply y* optimization on the stock portion of the portfolio
+    stock_capital = alloc_stock * total_capital
+    cash_capital = alloc_cash * total_capital
+    bond_capital = alloc_bond * total_capital
+
     max_rf_ratio = get_max_rf_ratio(risk_score, A)
     upper_bound = min(y_max, 1 - max_rf_ratio)
     if upper_bound <= y_min:
         y_min = max(0.01, upper_bound - 0.01)
 
-    # 4. Tối ưu hóa Utility
     def neg_utility(y):
         expected_rc = y * mu_p + (1 - y) * rf
         sigma_c = y * sigma_p
@@ -62,38 +61,51 @@ def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     y_opt = result.x
     y_capped = np.clip(y_opt, y_min, upper_bound)
 
-    # 5. Phân bổ vốn và kiểm tra ràng buộc risk-free
-    capital_risky = y_capped * total_capital
-    capital_rf = total_capital - capital_risky
+    capital_risky = stock_capital * y_capped
+    capital_rf_internal = stock_capital * (1 - y_capped)
+
+    capital_rf = cash_capital + bond_capital + capital_rf_internal
     rf_cap_limit = max_rf_ratio * total_capital
 
     if capital_rf > rf_cap_limit:
+        excess = capital_rf - rf_cap_limit
+        capital_risky += excess
         capital_rf = rf_cap_limit
-        capital_risky = total_capital - capital_rf
-        y_capped = capital_risky / total_capital
+        y_capped = capital_risky / stock_capital if stock_capital > 0 else 0
 
-    # 6. Tính thông số danh mục hoàn chỉnh
-    expected_rc = y_capped * mu_p + (1 - y_capped) * rf
-    sigma_c = y_capped * sigma_p
+    expected_rc = (
+        (stock_capital * (y_capped * mu_p + (1 - y_capped) * rf)) +
+        (cash_capital * rf) +
+        (bond_capital * rf)
+    ) / total_capital
+
+    sigma_c = (stock_capital * y_capped * sigma_p) / total_capital
     utility = expected_rc - 0.5 * A * sigma_c ** 2
-    capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
-    # 7. Output
+    capital_alloc = {
+        t: capital_risky * w for t, w in zip(tickers, weights)
+    }
+
     portfolio_info = {
-        'portfolio_name': '-'.join(best_key) if isinstance(best_key, tuple) else str(best_key),
+        'portfolio_name': '-'.join(best_key),
         'mu': mu_p,
         'sigma': sigma_p,
         'rf': rf,
+        'A': A,
+        'risk_score': risk_score,
         'y_opt': y_opt,
         'y_capped': y_capped,
-        'A': A,
         'expected_rc': expected_rc,
         'sigma_c': sigma_c,
         'utility': utility,
         'capital_risky': capital_risky,
         'capital_rf': capital_rf,
-        'risk_score': risk_score,
-        'max_rf_ratio': max_rf_ratio
+        'alloc_cash': alloc_cash,
+        'alloc_bond': alloc_bond,
+        'alloc_stock': alloc_stock,
+        'capital_cash': cash_capital,
+        'capital_bond': bond_capital,
+        'capital_stock': stock_capital
     }
 
     return (
