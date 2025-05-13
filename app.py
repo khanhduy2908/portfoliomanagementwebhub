@@ -11,6 +11,7 @@ from utils import (
     block_e_feasibility,
     block_f_backtest,
     block_g_optimization,
+    block_g1_bond_model_advanced,
     block_h_complete_portfolio,
     block_h1_visualization,
     block_h2_visualization,
@@ -141,6 +142,10 @@ if run_analysis:
                 valid_combinations, adj_returns_combinations, cov_matrix_dict, returns_benchmark
             )
             st.success("G – HRP + CVaR Optimization Done")
+
+            bond_return, bond_volatility, bond_label = bond_model.run(bond_price=bond_price, coupon_rate=bond_coupon, face_value=bond_face, years_to_maturity=bond_years
+            )
+            st.success("G1 – Bond Model Done")
 
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, sigma_p, mu, y_opt, mu_p, cov = block_h_complete_portfolio.run(
                 hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
