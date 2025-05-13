@@ -242,7 +242,8 @@ if run_analysis:
 
             # H2. Capital allocation visualization
             block_h2_visualization.run(capital_alloc=capital_alloc, capital_cash=portfolio_info['capital_cash'], capital_bond=portfolio_info['capital_bond'], capital_stock=portfolio_info['capital_risky'], tickers_portfolio)
-
+            block_h2_visualization.run_dynamic_allocation(monthly_alloc_df)
+            
             # H3. Efficient Frontier with Capital Allocation Line
             benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
             block_h3_visualization.run(
