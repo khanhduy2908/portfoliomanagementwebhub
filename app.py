@@ -1,5 +1,4 @@
 import streamlit as st
-streamlit run app.py --server.runOnSave false
 import pandas as pd
 import numpy as np
 import datetime
