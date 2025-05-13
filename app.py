@@ -89,7 +89,6 @@ allocation = allocation_matrix.get((risk_level, time_horizon_input), {
 })
 
 st.sidebar.markdown(f"**Mapped Risk Level:** {risk_level}")
-st.sidebar.markdown(f"**Selected Strategy:** {allocation['strategy']}")
 st.sidebar.markdown(f"**Target Allocation:**\n- Cash: {allocation['cash']*100:.0f}%\n- Bonds: {allocation['bond']*100:.0f}%\n- Stocks: {allocation['stock']*100:.0f}%")
 
 # --- G1: Bond Info Input (before pipeline) ---
