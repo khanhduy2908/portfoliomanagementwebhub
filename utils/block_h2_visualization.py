@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import streamlit as st
 import pandas as pd
+import matplotlib.dates as mdates
 
 def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_stock: float):
     if capital_alloc is None or capital_stock is None:
@@ -67,5 +68,42 @@ def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_s
         }])
         summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 
-        st.markdown("### 💼 Capital Allocation Table")
+        st.markdown("###Capital Allocation Table")
         st.dataframe(summary_df, use_container_width=True, height=300)
+
+def run_dynamic_allocation(monthly_alloc_df: pd.DataFrame):
+    """
+    Hiển thị biểu đồ đường và bảng phân bổ vốn theo thời gian cho từng lớp tài sản.
+    Input: monthly_alloc_df có cột 'Month', 'Cash', 'Bond', 'Ticker1', 'Ticker2', ...
+    """
+    if monthly_alloc_df is None or 'Month' not in monthly_alloc_df.columns:
+        st.warning("No monthly allocation data provided.")
+        return
+
+    # --- Melt để tạo long-form cho line plot ---
+    df_melted = monthly_alloc_df.melt(id_vars='Month', var_name='Asset Class', value_name='Capital (VND)')
+
+    # --- Biểu đồ đường ---
+    st.markdown("###Projected Asset Allocation Over Time")
+    fig, ax = plt.subplots(figsize=(12, 6))
+    sns.set_style("darkgrid")
+
+    sns.lineplot(data=df_melted, x='Month', y='Capital (VND)', hue='Asset Class', linewidth=2.2, ax=ax)
+
+    ax.set_title("Projected Monthly Allocation: Cash, Bonds, and Stocks", fontsize=14, color='white')
+    ax.set_xlabel("Month", fontsize=11, color='white')
+    ax.set_ylabel("Capital (VND)", fontsize=11, color='white')
+    ax.tick_params(colors='white')
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    fig.autofmt_xdate()
+    fig.patch.set_facecolor('#1e1e1e')
+    ax.set_facecolor('#1e1e1e')
+    ax.legend(facecolor='#2e2e2e', labelcolor='white')
+
+    st.pyplot(fig)
+
+    # --- Bảng dữ liệu ---
+    st.markdown("###Monthly Allocation Table")
+    df_display = monthly_alloc_df.copy()
+    df_display['Month'] = df_display['Month'].dt.strftime('%b %Y')
+    st.dataframe(df_display, use_container_width=True)
