@@ -92,6 +92,13 @@ st.sidebar.markdown(f"**Mapped Risk Level:** {risk_level}")
 st.sidebar.markdown(f"**Selected Strategy:** {allocation['strategy']}")
 st.sidebar.markdown(f"**Target Allocation:**\n- Cash: {allocation['cash']*100:.0f}%\n- Bonds: {allocation['bond']*100:.0f}%\n- Stocks: {allocation['stock']*100:.0f}%")
 
+# --- G1: Bond Info Input (before pipeline) ---
+st.sidebar.subheader("Bond Information (Optional)")
+bond_price = st.sidebar.number_input("Bond Market Price (VND)", value=1000000)
+bond_coupon = st.sidebar.number_input("Coupon Rate (%)", value=8.0) / 100
+bond_face = st.sidebar.number_input("Bond Face Value (VND)", value=1000000)
+bond_years = st.sidebar.number_input("Years to Maturity", value=5)
+
 # --- Assign to config ---
 config.tickers = tickers_user
 config.benchmark_symbol = benchmark_user
@@ -107,6 +114,9 @@ config.strategy_code = allocation['strategy']
 config.alloc_cash = allocation['cash']
 config.alloc_bond = allocation['bond']
 config.alloc_stock = allocation['stock']
+
+# Run button
+run_analysis = st.sidebar.button("Run Portfolio Optimization")
 
 # --- Validation ---
 if not config.tickers or config.benchmark_symbol is None:
