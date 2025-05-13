@@ -118,6 +118,15 @@ allocation = allocation_matrix.get((risk_level, time_horizon_input), {
     "cash": 0.2, "bond": 0.4, "stock": 0.4, "strategy": "Default"
 })
 
+base_cash = allocation['cash']
+base_bond = allocation['bond']
+base_stock = allocation['stock']
+alpha = max(0, min(1, (25 - A_user) / 23))
+
+alloc_stock = base_stock * (1 - 0.4 * alpha)
+alloc_cash = base_cash + base_stock * 0.4 * alpha * 0.5
+alloc_bond = 1.0 - alloc_cash - alloc_stock
+
 st.sidebar.markdown(f"**Mapped Strategy:** {allocation['strategy']}")
 st.sidebar.markdown(f"**Target Allocation**")
 st.sidebar.markdown(f"- Cash: {allocation['cash']*100:.0f}%")
@@ -159,9 +168,9 @@ config.A = A_user
 config.risk_score = risk_score_user
 config.time_horizon = time_horizon_input
 config.strategy_code = allocation['strategy']
-config.alloc_cash = allocation['cash']
-config.alloc_bond = allocation['bond']
-config.alloc_stock = allocation['stock']
+config.alloc_cash = alloc_cash
+config.alloc_bond = alloc_bond
+config.alloc_stock = alloc_stock
 config.factor_selection_strategy = strategy_options[selection_strategy]
 
 # Run Trigger
