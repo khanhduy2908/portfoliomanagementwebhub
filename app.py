@@ -120,6 +120,7 @@ config.strategy_code = allocation['strategy']
 config.alloc_cash = allocation['cash']
 config.alloc_bond = allocation['bond']
 config.alloc_stock = allocation['stock']
+config.factor_selection_strategy = strategy_options[selection_strategy]
 
 # Run button
 run_analysis = st.sidebar.button("Run Portfolio Optimization")
