@@ -96,6 +96,15 @@ bond_coupon = st.sidebar.number_input("Coupon Rate (%)", value=8.0) / 100
 bond_face = st.sidebar.number_input("Bond Face Value (VND)", value=1000000)
 bond_years = st.sidebar.number_input("Years to Maturity", value=5)
 
+# --- Factor Selection Strategy ---
+st.sidebar.subheader("Factor Selection Strategy")
+strategy_options = {
+    "Top 2 from each cluster": "top5_by_cluster",
+    "Top 5 overall": "top5_overall",
+    "Top 5 from strongest clusters": "strongest_clusters"
+}
+selection_strategy = st.sidebar.selectbox("Method", list(strategy_options.keys()))
+
 # --- Assign to config ---
 config.tickers = tickers_user
 config.benchmark_symbol = benchmark_user
