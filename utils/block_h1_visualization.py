@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 
 def display_portfolio_info(portfolio_info: dict, allocation_matrix: dict, risk_level: str, time_horizon: str):
     st.markdown("### Optimal Complete Portfolio Summary")
@@ -21,23 +20,28 @@ def display_portfolio_info(portfolio_info: dict, allocation_matrix: dict, risk_l
         y_capped = portfolio_info['y_capped']
         y_diff = y_opt - y_capped
 
-        st.markdown(f"**y* (Optimal Risk Exposure):** `{y_opt * 100:.1f}%`")
+        st.markdown(f"**y* (Optimal Risk Exposure in Stock):** `{y_opt * 100:.1f}%`")
         if y_diff > 0.005:
             st.markdown(f"**y (Final Used):** `{y_capped * 100:.1f}%` ⚠️ _adjusted due to constraints_")
         else:
             st.markdown(f"**y (Final Used):** `{y_capped * 100:.1f}%`")
 
-        st.markdown(f"**Max Risk-Free Ratio:** `{portfolio_info['max_rf_ratio'] * 100:.0f}%`")
+        st.markdown(f"**Max Risk-Free Ratio (Total):** `{portfolio_info['max_rf_ratio'] * 100:.0f}%`")
+
         st.markdown(f"**Capital in Risk-Free Assets:** `{portfolio_info['capital_rf']:,.0f} VND`")
+        st.markdown(f"  - Cash: `{portfolio_info['capital_cash']:,.0f} VND`")
+        st.markdown(f"  - Bond: `{portfolio_info['capital_bond']:,.0f} VND`")
         st.markdown(f"**Capital in Risky Assets (Equity):** `{portfolio_info['capital_risky']:,.0f} VND`")
         st.markdown(f"**Total Capital:** `{portfolio_info['capital_rf'] + portfolio_info['capital_risky']:,.0f} VND`")
 
+    # --- Risk-Free Allocation Limit Warning ---
     rf_limit = portfolio_info['max_rf_ratio'] * (portfolio_info['capital_rf'] + portfolio_info['capital_risky'])
     if portfolio_info['capital_rf'] > rf_limit:
         st.warning(f"⚠️ Risk-Free allocation exceeds maximum cap ({portfolio_info['max_rf_ratio']*100:.0f}%)")
 
     st.markdown("### Target vs Actual Allocation Comparison")
 
+    # Lấy tỷ trọng mục tiêu chính xác từ block h
     target_allocation = allocation_matrix.get((risk_level, time_horizon), {
         "cash": portfolio_info['target_cash_ratio'],
         "bond": portfolio_info['target_bond_ratio'],
