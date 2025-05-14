@@ -8,7 +8,7 @@ end_date = None
 rf_annual = 0.09  # Annual risk-free return (e.g., 9%)
 rf = 0.0075       # Monthly risk-free return (e.g., 0.75%)
 
-total_capital = 750_000_000
+total_capital = 1_000_000_000
 A = 15
 risk_score = 25
 
