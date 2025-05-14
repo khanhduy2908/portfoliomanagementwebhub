@@ -240,7 +240,7 @@ if run_analysis:
             st.success("Step H – Final portfolio allocation with integrated strategy computed.")
 
             # H1. Summary of portfolio and expected utility
-            block_h1_visualization.display_portfolio_info(portfolio_info, allocation_matrix, risk_level, time_horizon_input)
+            block_h1_visualization.display_portfolio_info(portfolio_info, risk_level, time_horizon)
 
             # H2. Capital allocation visualization
             st.session_state["target_stock_ratio"] = config.alloc_stock
