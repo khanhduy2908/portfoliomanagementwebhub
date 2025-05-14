@@ -1,9 +1,7 @@
-# utils/block_j_stress_testing.py
-
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
 from scipy.stats import t as t_dist
 from datetime import datetime
 import streamlit as st
@@ -77,50 +75,81 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     ]
     df_sens = pd.DataFrame(sensitivity_results)
 
-    # === PLOTS ===
-    fig1, ax1 = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
-    sns.barplot(data=df_hypo, x='Scenario', y='Portfolio Return (%)', palette='Reds', edgecolor='black', ax=ax1)
-    ax1.axhline(0, linestyle='--', color='white')
-    ax1.set(title="Scenario Impact", xlabel="Scenario", ylabel="Portfolio Return (%)")
-    ax1.set_facecolor('#1e1e1e')
-    ax1.tick_params(colors='white')
-    for label in ax1.get_xticklabels(): label.set_color('white')
-    for label in ax1.get_yticklabels(): label.set_color('white')
-
-    fig2, ax2 = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
-    sns.barplot(data=df_sens, x='Ticker', y='Portfolio Impact (%)', palette='Blues', edgecolor='black', ax=ax2)
-    ax2.axhline(0, linestyle='--', color='white')
-    ax2.set(title="Asset Sensitivity", xlabel="Ticker", ylabel="Portfolio Impact (%)")
-    ax2.set_facecolor('#1e1e1e')
-    ax2.tick_params(colors='white')
-    for label in ax2.get_xticklabels(): label.set_color('white')
-    for label in ax2.get_yticklabels(): label.set_color('white')
-
-    fig3, ax3 = plt.subplots(figsize=(5, 4), facecolor='#1e1e1e')
-    sns.histplot(returns_sim * 100, bins=50, kde=True, color='purple', ax=ax3)
-    ax3.axvline(-stress_var * 100, color='red', linestyle='--', label=f"VaR {int(confidence_level*100)}%: {-stress_var*100:.2f}%")
-    ax3.axvline(-stress_cvar * 100, color='orange', linestyle='--', label=f"CVaR {int(confidence_level*100)}%: {-stress_cvar*100:.2f}%")
-    ax3.set(title="Monte Carlo Return Distribution", xlabel="Portfolio Return (%)", ylabel="Frequency")
-    ax3.set_facecolor('#1e1e1e')
-    ax3.tick_params(colors='white')
-    ax3.legend(facecolor='black', labelcolor='white')
-    for label in ax3.get_xticklabels(): label.set_color('white')
-    for label in ax3.get_yticklabels(): label.set_color('white')
-
-    # === Streamlit Display ===
     st.markdown("### Stress Testing Overview")
-    col1, col2, col3 = st.columns(3)
-    with col1: st.pyplot(fig1, clear_figure=True)
-    with col2: st.pyplot(fig2, clear_figure=True)
-    with col3: st.pyplot(fig3, clear_figure=True)
 
-    # === Summary Table ===
+    # --- Plot Scenario Impact ---
+    fig1 = px.bar(
+        df_hypo,
+        x='Scenario',
+        y='Portfolio Return (%)',
+        color='Portfolio Return (%)',
+        color_continuous_scale='Reds',
+        title='Scenario Impact',
+        labels={'Portfolio Return (%)': 'Portfolio Return (%)'}
+    )
+    fig1.update_layout(
+        plot_bgcolor='#1e1e1e',
+        paper_bgcolor='#1e1e1e',
+        font_color='white',
+        coloraxis_colorbar=dict(title='Return (%)')
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # --- Plot Asset Sensitivity ---
+    fig2 = px.bar(
+        df_sens,
+        x='Ticker',
+        y='Portfolio Impact (%)',
+        color='Portfolio Impact (%)',
+        color_continuous_scale='Blues',
+        title='Asset Sensitivity',
+        labels={'Portfolio Impact (%)': 'Portfolio Impact (%)'}
+    )
+    fig2.update_layout(
+        plot_bgcolor='#1e1e1e',
+        paper_bgcolor='#1e1e1e',
+        font_color='white',
+        coloraxis_colorbar=dict(title='Impact (%)')
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # --- Plot Monte Carlo Return Distribution ---
+    df_hist = pd.DataFrame({'Returns (%)': returns_sim * 100})
+    fig3 = px.histogram(
+        df_hist,
+        x='Returns (%)',
+        nbins=50,
+        marginal='rug',
+        title='Monte Carlo Return Distribution',
+        color_discrete_sequence=['purple']
+    )
+    fig3.add_vline(
+        x=-stress_var * 100,
+        line_dash='dash',
+        line_color='red',
+        annotation_text=f"VaR {int(confidence_level*100)}%: {-stress_var*100:.2f}%",
+        annotation_position='top right'
+    )
+    fig3.add_vline(
+        x=-stress_cvar * 100,
+        line_dash='dash',
+        line_color='orange',
+        annotation_text=f"CVaR {int(confidence_level*100)}%: {-stress_cvar*100:.2f}%",
+        annotation_position='top right'
+    )
+    fig3.update_layout(
+        plot_bgcolor='#1e1e1e',
+        paper_bgcolor='#1e1e1e',
+        font_color='white',
+    )
+    st.plotly_chart(fig3, use_container_width=True)
+
+    # --- Summary Table ---
     summary = pd.DataFrame({
         'Type': ['Historical Shock', f'Monte Carlo VaR ({int(confidence_level*100)}%)', f'Monte Carlo CVaR ({int(confidence_level*100)}%)'],
         'Portfolio Drop (%)': [portfolio_drop_hist * 100, stress_var * 100, stress_cvar * 100],
         'Generated At': datetime.now().strftime('%Y-%m-%d %H:%M')
     })
-
     st.dataframe(summary.round(2), use_container_width=True)
 
     return summary
