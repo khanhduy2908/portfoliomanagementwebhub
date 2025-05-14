@@ -18,6 +18,7 @@ def get_max_rf_ratio(score, A, alloc_cash, alloc_bond, alloc_stock):
     else:
         suggested = 0.02 + (A - 2) * ((0.40 - 0.02) / (25 - 2))
 
+    # Calculate max risk-free based on cash, bond and stock
     max_target_rf = alloc_cash + alloc_bond + 0.4 * alloc_stock
     return min(hard_cap, suggested, max_target_rf)
 
@@ -30,6 +31,7 @@ def run(
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
 
+    # Select the best portfolio based on Sharpe ratio
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
 
@@ -69,6 +71,7 @@ def run(
     y_opt = result.x
     y_capped = np.clip(y_opt, y_min, upper_bound)
 
+    # Capital adjustment based on y_capped
     capital_risky = capital_stock * y_capped
     capital_rf_internal = capital_stock * (1 - y_capped)
     capital_rf_total = capital_cash + capital_bond + capital_rf_internal
