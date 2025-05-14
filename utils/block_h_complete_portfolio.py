@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize_scalar
 
-# --- Tính tỷ lệ tối đa cho risk-free asset dựa theo Risk Score, A và phân bổ mục tiêu ---
+# --- Tính tỷ lệ tối đa cho risk-free asset dựa theo Risk Score, A, và mục tiêu phân bổ ---
 def get_max_rf_ratio(score, A, alloc_cash, alloc_bond, alloc_stock):
     if 10 <= score <= 17:
         hard_cap = 0.40
@@ -22,7 +22,7 @@ def get_max_rf_ratio(score, A, alloc_cash, alloc_bond, alloc_stock):
     max_target_rf = alloc_cash + alloc_bond + 0.4 * alloc_stock
     return min(hard_cap, suggested, max_target_rf)
 
-# --- Hàm chính: Tối ưu phân bổ danh mục hoàn chỉnh theo y* ---
+# --- Hàm chính: Tối ưu phân bổ danh mục hoàn chỉnh ---
 def run(
     hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     rf, A, total_capital, risk_score,
@@ -77,20 +77,17 @@ def run(
         capital_rf_total = rf_cap_limit
         y_capped = capital_risky / capital_stock if capital_stock > 0 else 0
 
-    # --- Kiểm tra và điều chỉnh để tránh lệch quá mức so với phân bổ mục tiêu ---
-    tolerance = 0.05
-    actual_cash_ratio = capital_cash / total_capital
-    actual_bond_ratio = capital_bond / total_capital
+    # --- Điều chỉnh nếu lệch quá xa mục tiêu (> 5%) ---
+    actual_cash_ratio = (capital_cash + capital_rf_internal * alloc_cash / (alloc_cash + alloc_bond)) / total_capital
+    actual_bond_ratio = (capital_bond + capital_rf_internal * alloc_bond / (alloc_cash + alloc_bond)) / total_capital
     actual_stock_ratio = capital_risky / total_capital
 
-    if abs(actual_cash_ratio - alloc_cash) > tolerance or \
-       abs(actual_bond_ratio - alloc_bond) > tolerance or \
-       abs(actual_stock_ratio - alloc_stock) > tolerance:
-        # Tự động hiệu chỉnh lại y nếu lệch quá lớn
-        stock_ratio_corrected = alloc_stock
-        capital_risky = total_capital * stock_ratio_corrected
-        y_capped = capital_risky / capital_stock if capital_stock > 0 else y_capped
-        capital_rf_total = total_capital - capital_risky
+    for ratio, target, name in zip(
+        [actual_cash_ratio, actual_bond_ratio, actual_stock_ratio],
+        [alloc_cash, alloc_bond, alloc_stock],
+        ["Cash", "Bond", "Stock"]):
+        if abs(ratio - target) > 0.05:
+            raise ValueError(f"⚠️ Allocation deviation >5% from target for {name}: Actual {ratio*100:.1f}%, Target {target*100:.1f}%")
 
     expected_rc = (
         capital_stock * (y_capped * mu_p + (1 - y_capped) * rf) +
@@ -123,12 +120,6 @@ def run(
         'alloc_cash': alloc_cash,
         'alloc_bond': alloc_bond,
         'alloc_stock': alloc_stock,
-        'actual_cash_ratio': actual_cash_ratio,
-        'actual_bond_ratio': actual_bond_ratio,
-        'actual_stock_ratio': actual_stock_ratio,
-        'target_cash_ratio': alloc_cash,
-        'target_bond_ratio': alloc_bond,
-        'target_stock_ratio': alloc_stock,
         'max_rf_ratio': max_rf_ratio
     }
 
