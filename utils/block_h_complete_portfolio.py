@@ -135,7 +135,8 @@ def run(
         'target_cash_ratio': alloc_cash,
         'target_bond_ratio': alloc_bond,
         'target_stock_ratio': alloc_stock,
-        'max_rf_ratio': max_rf_ratio
+        'max_rf_ratio': max_rf_ratio,
+        'time_horizon': time_horizon
     }
 
     return (
