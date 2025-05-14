@@ -15,5 +15,6 @@ shap
 scipy
 joblib
 tqdm
+plotly
 vnstock
 openpyxl
