@@ -23,10 +23,11 @@ def get_max_rf_ratio(score, A):
     return min(hard_cap, suggested)
 
 # --- Hàm chính: Tối ưu phân bổ danh mục hoàn chỉnh theo y* ---
-def run(hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
-        rf, A, total_capital, risk_score,
-        alloc_cash, alloc_bond, alloc_stock,
-        y_min=0.6, y_max=0.9):
+def run(
+    hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
+    rf, A, total_capital, risk_score,
+    alloc_cash, alloc_bond, alloc_stock,
+    y_min=0.6, y_max=0.9):
 
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
