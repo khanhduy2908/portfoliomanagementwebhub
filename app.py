@@ -234,7 +234,6 @@ if run_analysis:
             best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, sigma_p, mu, y_opt, mu_p, cov = block_h_complete_portfolio.run(
                 hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
                 rf=config.rf, A=config.A, total_capital=config.total_capital, risk_score=config.risk_score,
-                bond_return=bond_return, bond_volatility=bond_volatility,
                 alloc_cash=config.alloc_cash, alloc_bond=config.alloc_bond, alloc_stock=config.alloc_stock,
                 y_min=config.y_min, y_max=config.y_max
             )
