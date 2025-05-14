@@ -243,6 +243,7 @@ if run_analysis:
             block_h1_visualization.display_portfolio_info(portfolio_info)
 
             # H2. Capital allocation visualization
+            st.session_state["target_stock_ratio"] = config.alloc_stock
             block_h2_visualization.run(capital_alloc=capital_alloc, capital_cash=portfolio_info['capital_cash'], capital_bond=portfolio_info['capital_bond'], capital_stock=portfolio_info['capital_risky'], tickers=tickers_portfolio)
             
             # H3. Efficient Frontier with Capital Allocation Line
