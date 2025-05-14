@@ -9,17 +9,19 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list):
         st.warning("⚠️ Missing capital allocation or tickers.")
         return
 
-    # --- Lấy lại từ portfolio_info (đồng bộ block H) ---
-    capital_cash = portfolio_info['capital_cash']
-    capital_bond = portfolio_info['capital_bond']
-    capital_stock = portfolio_info['capital_stock']
-    capital_risky = portfolio_info['capital_risky']
+    # --- Lấy số liệu vốn từ portfolio_info để đảm bảo đồng bộ ---
+    capital_cash = portfolio_info.get('capital_cash', 0)
+    capital_bond = portfolio_info.get('capital_bond', 0)
+    capital_stock = portfolio_info.get('capital_stock', 0)
+    capital_risky = portfolio_info.get('capital_risky', 0)
 
+    # Tổng vốn cổ phiếu thực tế từ capital_alloc
     capital_from_stocks = sum([capital_alloc.get(t, 0) for t in tickers])
+    # Đồng bộ nếu lệch lớn hơn 1 VND (rất nhỏ)
     if abs(capital_risky - capital_from_stocks) > 1:
-        capital_from_stocks = capital_risky  # Ưu tiên số từ block H
+        capital_from_stocks = capital_risky
 
-    # Tổng vốn
+    # Tổng vốn danh mục đầu tư
     sizes = [capital_cash, capital_bond] + [capital_alloc.get(t, 0) for t in tickers]
     labels = ['Cash', 'Bond'] + tickers
     total = sum(sizes)
@@ -28,8 +30,9 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list):
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
-    # Vẽ biểu đồ pie
+    # --- Vẽ biểu đồ tròn phân bổ ---
     col1, col2 = st.columns([2, 1])
+
     with col1:
         fig, ax = plt.subplots(figsize=(6, 5), facecolor='#1e1e1e')
         cmap = plt.cm.get_cmap('tab20', len(labels))
@@ -55,7 +58,7 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list):
         fig.tight_layout()
         st.pyplot(fig)
 
-    # Bảng dữ liệu
+    # --- Bảng dữ liệu chi tiết ---
     with col2:
         stock_total = capital_from_stocks
         summary_df = pd.DataFrame({
@@ -71,11 +74,15 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list):
                 [f"{stock_total/total*100:.1f}%", "100.0%"]
             )
         })
+
         st.markdown("### Allocation Table")
         st.dataframe(summary_df, use_container_width=True, height=400)
 
-    # Cảnh báo nếu lệch > 5%
+    # --- Cảnh báo nếu tỷ trọng cổ phiếu thực tế lệch so với mục tiêu quá 5% ---
     target_stock_ratio = portfolio_info.get("target_stock_ratio", None)
     actual_stock_ratio = stock_total / total
-    if target_stock_ratio is not None and abs(actual_stock_ratio - target_stock_ratio) > 0.05:
-        st.warning(f"⚠️ Stock allocation ({actual_stock_ratio*100:.1f}%) deviates from target ({target_stock_ratio*100:.1f}%) by more than 5%.")
+
+    if target_stock_ratio is not None:
+        diff = abs(actual_stock_ratio - target_stock_ratio)
+        if diff > 0.05:
+            st.warning(f"⚠️ Stock allocation ({actual_stock_ratio*100:.1f}%) deviates from target ({target_stock_ratio*100:.1f}%) by more than 5%.")
