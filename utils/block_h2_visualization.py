@@ -1,22 +1,23 @@
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import seaborn as sns
 import streamlit as st
 import pandas as pd
-import matplotlib.dates as mdates
 
-
-def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_stock: float):
+def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_stock: float, tickers: list):
     if capital_alloc is None or capital_stock is None:
         st.error("⚠️ Missing capital allocation inputs.")
         return
 
-    # Build asset class breakdown
-    tickers_final = list(capital_alloc.keys())
+    # 1. Đồng bộ tickers để đảm bảo đúng thứ tự
+    tickers_final = tickers
     capital_stock_total = sum([capital_alloc[t] for t in tickers_final])
 
+    # Kiểm tra tính nhất quán
     if abs(capital_stock - capital_stock_total) > 1:
         capital_stock = capital_stock_total
 
+    # 2. Chuẩn bị dữ liệu biểu đồ và bảng
     labels = ['Cash', 'Bond'] + tickers_final
     sizes = [capital_cash, capital_bond] + [capital_alloc[t] for t in tickers_final]
     total = sum(sizes)
@@ -29,6 +30,7 @@ def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_s
 
     col1, col2 = st.columns([2, 1])
 
+    # 3. Biểu đồ Pie
     with col1:
         fig, ax = plt.subplots(figsize=(6, 5), facecolor='#1e1e1e')
         cmap = plt.cm.get_cmap('Set3', len(labels))
@@ -46,7 +48,7 @@ def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_s
         for text in texts:
             text.set_color('white')
         for autotext in autotexts:
-            autotext.set_color('yellow')
+            autotext.set_color('black')
 
         ax.set_title("Overall Capital Allocation", fontsize=13, color='white')
         ax.set_facecolor('#1e1e1e')
@@ -54,6 +56,7 @@ def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_s
         fig.tight_layout()
         st.pyplot(fig)
 
+    # 4. Bảng phân bổ
     with col2:
         summary_df = pd.DataFrame({
             "Asset Class / Ticker": labels,
@@ -70,10 +73,9 @@ def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_s
         st.markdown("### Capital Allocation Table")
         st.dataframe(summary_df, use_container_width=True, height=300)
 
-
 def run_dynamic_allocation(monthly_alloc_df: pd.DataFrame):
     if monthly_alloc_df is None or 'Month' not in monthly_alloc_df.columns:
-        st.warning("⚠️ No monthly allocation data provided.")
+        st.warning("No monthly allocation data provided.")
         return
 
     df_melted = monthly_alloc_df.melt(id_vars='Month', var_name='Asset Class', value_name='Capital (VND)')
