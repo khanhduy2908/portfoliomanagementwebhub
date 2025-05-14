@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 def display_portfolio_info(portfolio_info: dict):
-    st.markdown("###Optimal Complete Portfolio Summary")
+    st.markdown("### Optimal Complete Portfolio Summary")
 
     col1, col2 = st.columns(2)
 
@@ -17,15 +18,28 @@ def display_portfolio_info(portfolio_info: dict):
 
     # --- Cột phải: Capital Structure ---
     with col2:
-        st.markdown(f"**y\* (Optimal Risk Exposure):** `{portfolio_info['y_opt'] * 100:.1f}%`")
-        st.markdown(f"**y (Final Used):** `{portfolio_info['y_capped'] * 100:.1f}%`")
+        y_opt = portfolio_info['y_opt']
+        y_capped = portfolio_info['y_capped']
+        y_diff = y_opt - y_capped
+
+        st.markdown(f"**y\* (Optimal Risk Exposure):** `{y_opt * 100:.1f}%`")
+        if y_diff > 0.005:
+            st.markdown(f"**y (Final Used):** `{y_capped * 100:.1f}%` ⚠️ _adjusted due to constraints_")
+        else:
+            st.markdown(f"**y (Final Used):** `{y_capped * 100:.1f}%`")
+
         st.markdown(f"**Max Risk-Free Ratio:** `{portfolio_info['max_rf_ratio'] * 100:.0f}%`")
         st.markdown(f"**Capital in Risk-Free Assets:** `{portfolio_info['capital_rf']:,.0f} VND`")
         st.markdown(f"**Capital in Risky Assets (Equity):** `{portfolio_info['capital_risky']:,.0f} VND`")
         st.markdown(f"**Total Capital:** `{portfolio_info['capital_rf'] + portfolio_info['capital_risky']:,.0f} VND`")
 
+    # --- Cảnh báo nếu risk-free > giới hạn ---
+    rf_limit = portfolio_info['max_rf_ratio'] * (portfolio_info['capital_rf'] + portfolio_info['capital_risky'])
+    if portfolio_info['capital_rf'] > rf_limit:
+        st.warning(f"⚠️ Risk-Free allocation exceeds maximum cap ({portfolio_info['max_rf_ratio']*100:.0f}%)")
+
     # --- Bảng chi tiết phân bổ ---
-    st.markdown("###Target Asset Class Allocation")
+    st.markdown("### Target Asset Class Allocation")
     breakdown_df = pd.DataFrame({
         "Asset Class": ["Cash", "Bonds", "Stocks"],
         "Target Ratio": [
