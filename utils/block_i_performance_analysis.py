@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import streamlit as st
 
 def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
@@ -68,51 +67,5 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         ]
     })
 
-    # --- Vẽ biểu đồ hiệu suất ---
-    st.subheader("Cumulative Returns")
-    fig1, ax1 = plt.subplots(figsize=(10, 4))
-    fig1.patch.set_facecolor('#121212')
-    ax1.set_facecolor('#121212')
-    ax1.plot(cumulative_returns.index, cumulative_returns, label='Portfolio', color='cyan')
-    ax1.plot(benchmark_cumulative.index, benchmark_cumulative, label='Benchmark', color='magenta')
-    ax1.set_title("Cumulative Returns (Normalized)", color='white')
-    ax1.set_xlabel("Date", color='white')
-    ax1.set_ylabel("Index Level", color='white')
-    ax1.tick_params(colors='white')
-    ax1.legend(facecolor='#1e1e1e', labelcolor='white')
-    ax1.grid(False)
-    st.pyplot(fig1)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Drawdown (%)")
-        fig2, ax2 = plt.subplots(figsize=(6, 3))
-        fig2.patch.set_facecolor('#121212')
-        ax2.set_facecolor('#121212')
-        ax2.fill_between(drawdown.index, drawdown.values * 100, color='red', alpha=0.4)
-        ax2.set_title("Portfolio Drawdown", color='white')
-        ax2.set_ylabel("Drawdown (%)", color='white')
-        ax2.tick_params(colors='white')
-        ax2.grid(False)
-        st.pyplot(fig2)
-
-    with col2:
-        st.subheader("12-Month Rolling Sharpe Ratio")
-        if not rolling_sharpe.empty:
-            fig3, ax3 = plt.subplots(figsize=(6, 3))
-            fig3.patch.set_facecolor('#121212')
-            ax3.set_facecolor('#121212')
-            ax3.plot(rolling_sharpe.index, rolling_sharpe, color='orange')
-            ax3.axhline(0, linestyle='--', color='white', alpha=0.4)
-            ax3.set_title("Rolling Sharpe Ratio", color='white')
-            ax3.tick_params(colors='white')
-            ax3.grid(False)
-            st.pyplot(fig3)
-        else:
-            st.warning("Not enough data for rolling Sharpe ratio.")
-
-    st.subheader("Performance Summary")
-    st.dataframe(summary_df.round(4), use_container_width=True)
-
-    return summary_df
+    # Chỉ trả về summary, không vẽ biểu đồ matplotlib ở đây
+    return summary_df, rolling_sharpe
