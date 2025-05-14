@@ -22,7 +22,7 @@ def display_portfolio_info(portfolio_info: dict):
         y_capped = portfolio_info['y_capped']
         y_diff = y_opt - y_capped
 
-        st.markdown(f"**y\* (Optimal Risk Exposure):** `{y_opt * 100:.1f}%`")
+        st.markdown(f"**y* (Optimal Risk Exposure):** `{y_opt * 100:.1f}%`")
         if y_diff > 0.005:
             st.markdown(f"**y (Final Used):** `{y_capped * 100:.1f}%` ⚠️ _adjusted due to constraints_")
         else:
@@ -48,15 +48,15 @@ def display_portfolio_info(portfolio_info: dict):
     )
 
     target_ratios = {
-        "Cash": portfolio_info['target_cash_ratio'],
-        "Bonds": portfolio_info['target_bond_ratio'],
-        "Stocks": portfolio_info['target_stock_ratio']
+        "Cash": portfolio_info['alloc_cash'],
+        "Bonds": portfolio_info['alloc_bond'],
+        "Stocks": portfolio_info['alloc_stock']
     }
 
     actual_ratios = {
-        "Cash": portfolio_info['actual_cash_ratio'],
-        "Bonds": portfolio_info['actual_bond_ratio'],
-        "Stocks": portfolio_info['actual_stock_ratio']
+        "Cash": portfolio_info['capital_cash'] / total_cap,
+        "Bonds": portfolio_info['capital_bond'] / total_cap,
+        "Stocks": portfolio_info['capital_stock'] / total_cap
     }
 
     key_map = {
