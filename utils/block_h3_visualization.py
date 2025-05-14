@@ -17,76 +17,76 @@ def run(
         st.error(f"❌ Failed to extract best portfolio: {e}")
         return
 
-    # === Step 1: Get realistic mu and covariance matrix ===
+    # --- Step 1: Get realistic mu and covariance ---
     if adj_returns_combinations and cov_matrix_dict:
         try:
-            mu_dict = adj_returns_combinations.get(best_key, None)
-            cov_df = cov_matrix_dict.get(best_key, None)
+            mu_dict = adj_returns_combinations.get(best_key)
+            cov_df = cov_matrix_dict.get(best_key)
             if mu_dict is None or cov_df is None:
                 raise ValueError("Missing mu or covariance data for best portfolio key.")
             mu_realistic = np.array([mu_dict[t] for t in tickers]) / 100
             cov = cov_df.loc[tickers, tickers].values
         except Exception as e:
             st.warning(f"⚠️ Fallback: failed to fetch mu/cov accurately: {e}")
-            mu_realistic = np.full(len(tickers), result.get('Expected Return (%)', 0)/100)
-            cov = np.outer(weights, weights) * (result.get('Volatility (%)', 0)/100) ** 2
+            mu_realistic = np.full(len(tickers), result.get('Expected Return (%)', 0) / 100)
+            cov = np.outer(weights, weights) * (result.get('Volatility (%)', 0) / 100) ** 2
     else:
-        mu_realistic = np.full(len(tickers), result.get('Expected Return (%)', 0)/100)
-        cov = np.outer(weights, weights) * (result.get('Volatility (%)', 0)/100) ** 2
+        mu_realistic = np.full(len(tickers), result.get('Expected Return (%)', 0) / 100)
+        cov = np.outer(weights, weights) * (result.get('Volatility (%)', 0) / 100) ** 2
 
-    # === Step 2: Simulate Efficient Frontier Portfolios ===
-    mu_sim, sigma_sim, sharpe_sim = [], [], []
+    # --- Step 2: Simulate Efficient Frontier Portfolios ---
     if simulate_for_visual and len(tickers) > 0:
-        n_simulations = 10000
+        n_simulations = 20000  # tăng số lượng để mượt hơn
         np.random.seed(42)
         weights_sim = np.random.dirichlet(np.ones(len(tickers)), size=n_simulations)
         mu_sim = weights_sim @ mu_realistic
         sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
         sharpe_sim = (mu_sim - rf) / sigma_sim
 
-        # Filter out unrealistic points
-        mask = (sigma_sim > 1e-4) & (mu_sim > 1e-4) & np.isfinite(sharpe_sim)
-        mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
+        # Loại bỏ điểm không hợp lệ
+        valid_mask = (sigma_sim > 1e-5) & (mu_sim > 1e-5) & np.isfinite(sharpe_sim)
+        mu_sim, sigma_sim, sharpe_sim = mu_sim[valid_mask], sigma_sim[valid_mask], sharpe_sim[valid_mask]
+    else:
+        mu_sim, sigma_sim, sharpe_sim = np.array([]), np.array([]), np.array([])
 
-    # === Step 3: Plotting ===
+    # --- Step 3: Plotting ---
     fig, ax = plt.subplots(figsize=(10, 7), dpi=100, facecolor="#121212")
 
-    if simulate_for_visual and len(mu_sim) > 0:
-        scatter = ax.scatter(
+    # Gradient scatter theo Sharpe Ratio
+    if len(mu_sim) > 0:
+        sc = ax.scatter(
             sigma_sim * 100, mu_sim * 100,
             c=sharpe_sim, cmap='plasma',
-            s=14, alpha=0.85, edgecolors='none'
+            s=12, alpha=0.85, edgecolors='none'
         )
-        cbar = plt.colorbar(scatter, ax=ax)
+        cbar = plt.colorbar(sc, ax=ax)
         cbar.set_label("Sharpe Ratio", fontsize=11, color='white')
         cbar.ax.tick_params(labelsize=9, colors='white')
         plt.setp(cbar.ax.get_yticklabels(), color='white')
 
-    # Risk-Free Rate point
-    ax.scatter(0, rf * 100, c='deepskyblue', s=100, label=f"Risk-Free Rate ({rf * 100:.2f}%)", zorder=5)
+    # Các điểm đặc trưng
+    ax.scatter(0, rf * 100, c='deepskyblue', s=120, label=f"Risk-Free Rate ({rf * 100:.2f}%)", zorder=5)
 
-    # Optimal Risky Portfolio
     ax.scatter(
         sigma_p * 100, mu_p * 100,
-        c='red', marker='*', s=180,
-        label=f"Optimal Risky Portfolio ({', '.join(tickers)})", edgecolors='black', linewidth=0.8, zorder=10
+        c='red', marker='*', s=200,
+        label=f"Optimal Risky Portfolio ({', '.join(tickers)})", edgecolors='black', linewidth=1.0, zorder=10
     )
 
-    # Optimal Complete Portfolio (including cash)
     ax.scatter(
         sigma_c * 100, expected_rc * 100,
-        c='lime', marker='D', s=150,
-        label=f"Optimal Complete Portfolio (y={y_capped:.2f})", edgecolors='black', linewidth=0.8, zorder=9
+        c='lime', marker='D', s=170,
+        label=f"Optimal Complete Portfolio (y={y_capped:.2f})", edgecolors='black', linewidth=1.0, zorder=9
     )
 
-    # Leveraged Portfolio if applicable
+    # Nếu có danh mục đòn bẩy
     if abs(y_opt - y_capped) > 0.01:
         sigma_uncapped = y_opt * sigma_p
         rc_uncapped = y_opt * mu_p + (1 - y_opt) * rf
         ax.scatter(
             sigma_uncapped * 100, rc_uncapped * 100,
-            c='magenta', marker='X', s=140,
-            label=f"Leveraged Portfolio (y={y_opt:.2f})", edgecolors='black', linewidth=0.8, zorder=8
+            c='magenta', marker='X', s=150,
+            label=f"Leveraged Portfolio (y={y_opt:.2f})", edgecolors='black', linewidth=1.0, zorder=8
         )
 
     # Capital Allocation Line (CAL)
@@ -96,14 +96,14 @@ def run(
     y_cal = rf * 100 + slope * x_cal
     ax.plot(x_cal, y_cal, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
 
-    # Formatting
-    ax.set_title("Efficient Frontier with Optimal Complete Portfolio", fontsize=14, color='white')
-    ax.set_xlabel("Volatility (%)", fontsize=12, color='white')
-    ax.set_ylabel("Expected Return (%)", fontsize=12, color='white')
-    ax.tick_params(labelsize=10, colors='white')
+    # Format chart
+    ax.set_title("Efficient Frontier with Optimal Complete Portfolio", fontsize=16, color='white')
+    ax.set_xlabel("Volatility (%)", fontsize=14, color='white')
+    ax.set_ylabel("Expected Return (%)", fontsize=14, color='white')
+    ax.tick_params(labelsize=11, colors='white')
     ax.set_facecolor("#121212")
     fig.patch.set_facecolor("#121212")
     ax.grid(False)
-    ax.legend(facecolor='#1e1e1e', labelcolor='white', fontsize=10, loc="upper left")
+    ax.legend(facecolor='#1e1e1e', labelcolor='white', fontsize=11, loc="upper left")
 
     st.pyplot(fig)
