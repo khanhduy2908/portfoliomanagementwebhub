@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize
 
 def get_max_rf_ratio(score, A, alloc_cash, alloc_bond, alloc_stock):
     if 10 <= score <= 17:
@@ -21,14 +21,34 @@ def get_max_rf_ratio(score, A, alloc_cash, alloc_bond, alloc_stock):
     max_target_rf = alloc_cash + alloc_bond + 0.4 * alloc_stock
     return min(hard_cap, suggested, max_target_rf)
 
+def penalty_allocations(w, target_alloc, penalty=1000):
+    # w and target_alloc are vectors [cash, bond, stock, risky_fraction_in_stock]
+    penalties = 0
+    for i in range(len(w)):
+        diff = w[i] - target_alloc[i]
+        if abs(diff) > 0.05:  # 5% tolerance
+            penalties += penalty * diff**2
+    return penalties
+
+def utility_function(w, mu_vec, cov_mat, rf, A, target_alloc):
+    # w = [cash, bond, stock_total, risky_fraction]
+    # Expected return (annualized or monthly as input)
+    mu_p = w[0] * rf + w[1] * rf + w[2] * (w[3] * mu_vec.mean() + (1 - w[3]) * rf)
+    # Volatility comes only from risky stock portion
+    sigma_p = np.sqrt((w[2] * w[3])**2 * np.dot(mu_vec.T, np.dot(cov_mat, mu_vec)))
+    utility = mu_p - 0.5 * A * sigma_p**2
+
+    penalty = penalty_allocations(w, target_alloc)
+    return -utility + penalty  # We minimize negative utility plus penalty
+
 def run(
     hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     rf, A, total_capital, risk_score,
     alloc_cash, alloc_bond, alloc_stock,
-    y_min=0.6, y_max=0.9, time_horizon=None, target_allocation=None):  # Add time_horizon
+    y_min=0.6, y_max=0.9, time_horizon=None):
 
     if not hrp_result_dict:
-        raise ValueError("❌ No valid HRP-CVaR portfolios found.")
+        raise ValueError("No valid HRP-CVaR portfolios found.")
 
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
@@ -37,95 +57,66 @@ def run(
     weights = np.array([best_portfolio['Weights'][t] for t in tickers])
     weights /= weights.sum()
 
-    mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
-    cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
+    mu_stock = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
+    cov_stock = cov_matrix_dict[best_key].loc[tickers, tickers].values
 
-    mu_p = weights @ mu
-    sigma_p = np.sqrt(weights.T @ cov @ weights)
+    # Target allocation vector: cash, bond, stock, risky fraction inside stock
+    target_alloc = np.array([alloc_cash, alloc_bond, alloc_stock, 0.7])  # risky_fraction default 70%
 
-    if mu_p <= 0 or sigma_p <= 0:
-        raise ValueError("❌ Risky portfolio has invalid return or volatility.")
+    # Initial guess
+    w0 = np.array([alloc_cash, alloc_bond, alloc_stock, 0.7])
 
-    capital_cash = alloc_cash * total_capital
-    capital_bond = alloc_bond * total_capital
-    capital_stock = alloc_stock * total_capital
+    bounds = [(max(0, alloc_cash - 0.05), min(1, alloc_cash + 0.05)),
+              (max(0, alloc_bond - 0.05), min(1, alloc_bond + 0.05)),
+              (max(0, alloc_stock - 0.05), min(1, alloc_stock + 0.05)),
+              (y_min, y_max)]
 
-    # Calculate max risk-free ratio based on risk score and A (risk aversion)
-    max_rf_ratio = get_max_rf_ratio(risk_score, A, alloc_cash, alloc_bond, alloc_stock)
+    constraints = ({'type': 'eq', 'fun': lambda w: np.sum(w[:3]) - 1})  # cash+bond+stock = 1
 
-    # Adjust the upper bound based on max risk-free ratio
-    upper_bound = min(y_max, 1 - max_rf_ratio)
-    if upper_bound <= y_min:
-        y_min = max(0.01, upper_bound - 0.01)
+    res = minimize(
+        utility_function,
+        w0,
+        args=(mu_stock, cov_stock, rf, A, target_alloc),
+        bounds=bounds,
+        constraints=constraints,
+        method='SLSQP',
+        options={'ftol': 1e-9, 'disp': False}
+    )
 
-    # Utility function for portfolio optimization
-    def neg_utility(y):
-        expected_return = y * mu_p + (1 - y) * rf
-        volatility = y * sigma_p
-        return -(expected_return - 0.5 * A * volatility ** 2)
+    if not res.success:
+        raise ValueError(f"Optimization failed: {res.message}")
 
-    # Minimize the negative utility function to find the optimal risk exposure (y)
-    result = minimize_scalar(neg_utility, bounds=(y_min, upper_bound), method='bounded')
-    y_opt = result.x
-    y_capped = np.clip(y_opt, y_min, upper_bound)
+    w_opt = res.x
+    cash_alloc, bond_alloc, stock_alloc, risky_fraction = w_opt
 
-    capital_risky = capital_stock * y_capped
-    capital_rf_internal = capital_stock * (1 - y_capped)
-    capital_rf_total = capital_cash + capital_bond + capital_rf_internal
-
-    # Ensure risk-free capital does not exceed maximum allowed
-    rf_cap_limit = max_rf_ratio * total_capital
-    if capital_rf_total > rf_cap_limit:
-        excess = capital_rf_total - rf_cap_limit
-        capital_risky += excess
-        capital_rf_total = rf_cap_limit
-        y_capped = capital_risky / capital_stock if capital_stock > 0 else 0
-
-    # Recalculate actual asset allocation ratios
-    actual_cash_ratio = (capital_cash + capital_rf_internal * alloc_cash / (alloc_cash + alloc_bond)) / total_capital
-    actual_bond_ratio = (capital_bond + capital_rf_internal * alloc_bond / (alloc_cash + alloc_bond)) / total_capital
-    actual_stock_ratio = capital_risky / total_capital
-
-    # Clip ratios if they deviate more than 5% from the target allocation
-    def clip_ratio(r, target): return min(max(r, target - 0.05), target + 0.05)
-
-    actual_cash_ratio = clip_ratio(actual_cash_ratio, alloc_cash)
-    actual_bond_ratio = clip_ratio(actual_bond_ratio, alloc_bond)
-    actual_stock_ratio = clip_ratio(actual_stock_ratio, alloc_stock)
-
-    total_adjusted = actual_cash_ratio + actual_bond_ratio + actual_stock_ratio
-    actual_cash_ratio /= total_adjusted
-    actual_bond_ratio /= total_adjusted
-    actual_stock_ratio /= total_adjusted
-
-    # Calculate the final capital allocation based on adjusted ratios
-    capital_cash = total_capital * actual_cash_ratio
-    capital_bond = total_capital * actual_bond_ratio
-    capital_stock = total_capital * actual_stock_ratio
-    capital_risky = capital_stock * y_capped
-    capital_rf_total = capital_cash + capital_bond + capital_stock * (1 - y_capped)
-
-    # Calculate expected return and volatility for the final portfolio
-    expected_rc = (
-        capital_stock * (y_capped * mu_p + (1 - y_capped) * rf) +
-        capital_bond * rf +
-        capital_cash * rf
-    ) / total_capital
-
-    sigma_c = (capital_stock * y_capped * sigma_p) / total_capital
-    utility = expected_rc - 0.5 * A * sigma_c ** 2
+    capital_cash = cash_alloc * total_capital
+    capital_bond = bond_alloc * total_capital
+    capital_stock = stock_alloc * total_capital
+    capital_risky = capital_stock * risky_fraction
+    capital_rf_total = capital_cash + capital_bond + capital_stock * (1 - risky_fraction)
 
     capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
 
+    expected_rc = (
+        capital_cash * rf + capital_bond * rf +
+        capital_stock * (risky_fraction * mu_stock.mean() + (1 - risky_fraction) * rf)
+    ) / total_capital
+
+    sigma_c = (capital_stock * risky_fraction * np.sqrt(np.dot(weights.T, np.dot(cov_stock, weights)))) / total_capital
+
+    utility = expected_rc - 0.5 * A * sigma_c ** 2
+
+    max_rf_ratio = get_max_rf_ratio(risk_score, A, alloc_cash, alloc_bond, alloc_stock)
+
     portfolio_info = {
         'portfolio_name': '-'.join(best_key),
-        'mu': mu_p,
-        'sigma': sigma_p,
+        'mu': mu_stock.mean(),
+        'sigma': np.sqrt(np.dot(weights.T, np.dot(cov_stock, weights))),
         'rf': rf,
         'A': A,
         'risk_score': risk_score,
-        'y_opt': y_opt,
-        'y_capped': y_capped,
+        'y_opt': risky_fraction,
+        'y_capped': risky_fraction,
         'expected_rc': expected_rc,
         'sigma_c': sigma_c,
         'utility': utility,
@@ -137,9 +128,9 @@ def run(
         'alloc_cash': alloc_cash,
         'alloc_bond': alloc_bond,
         'alloc_stock': alloc_stock,
-        'actual_cash_ratio': actual_cash_ratio,
-        'actual_bond_ratio': actual_bond_ratio,
-        'actual_stock_ratio': actual_stock_ratio,
+        'actual_cash_ratio': cash_alloc,
+        'actual_bond_ratio': bond_alloc,
+        'actual_stock_ratio': stock_alloc,
         'target_cash_ratio': alloc_cash,
         'target_bond_ratio': alloc_bond,
         'target_stock_ratio': alloc_stock,
@@ -148,7 +139,8 @@ def run(
     }
 
     return (
-        best_portfolio, y_capped, capital_alloc,
+        best_portfolio, risky_fraction, capital_alloc,
         sigma_c, expected_rc, weights, tickers,
-        portfolio_info, sigma_p, mu, y_opt, mu_p, cov
+        portfolio_info, np.sqrt(np.dot(weights.T, np.dot(cov_stock, weights))),
+        mu_stock, risky_fraction, mu_stock.mean(), cov_stock
     )
