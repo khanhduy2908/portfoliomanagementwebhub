@@ -7,16 +7,16 @@ def display_portfolio_info(portfolio_info: dict):
 
     col1, col2 = st.columns(2)
 
-    # --- Cột trái: Risk Profile & Return Stats ---
+    # --- Left Column: Risk Profile & Return Stats ---
     with col1:
         st.markdown(f"**Portfolio Name:** `{portfolio_info['portfolio_name']}`")
         st.markdown(f"**Risk Tolerance Score:** `{portfolio_info['risk_score']}`")
-        st.markdown(f"**Risk Aversion Coefficient (A):** `{portfolio_info['A']}`")
+        st.markdown(f"**Risk Aversion Coefficient (A):** `{portfolio_info['A']:.2f}`")
         st.markdown(f"**Expected Monthly Return:** `{portfolio_info['expected_rc'] * 100:.2f}%`")
         st.markdown(f"**Monthly Volatility:** `{portfolio_info['sigma_c'] * 100:.2f}%`")
         st.markdown(f"**Utility Score:** `{portfolio_info['utility']:.2f}`")
 
-    # --- Cột phải: Capital Structure ---
+    # --- Right Column: Capital Structure ---
     with col2:
         y_opt = portfolio_info['y_opt']
         y_capped = portfolio_info['y_capped']
@@ -33,15 +33,20 @@ def display_portfolio_info(portfolio_info: dict):
         st.markdown(f"**Capital in Risky Assets (Equity):** `{portfolio_info['capital_risky']:,.0f} VND`")
         st.markdown(f"**Total Capital:** `{portfolio_info['capital_rf'] + portfolio_info['capital_risky']:,.0f} VND`")
 
-    # --- Cảnh báo nếu risk-free > giới hạn ---
+    # --- Risk-Free Allocation Limit Warning ---
     rf_limit = portfolio_info['max_rf_ratio'] * (portfolio_info['capital_rf'] + portfolio_info['capital_risky'])
     if portfolio_info['capital_rf'] > rf_limit:
         st.warning(f"⚠️ Risk-Free allocation exceeds maximum cap ({portfolio_info['max_rf_ratio']*100:.0f}%)")
 
-    # --- Phân tích chi tiết phân bổ tài sản ---
+    # --- Allocation Comparison ---
     st.markdown("### Target vs Actual Allocation Comparison")
 
-    total_cap = portfolio_info['capital_cash'] + portfolio_info['capital_bond'] + portfolio_info['capital_stock']
+    total_cap = (
+        portfolio_info['capital_cash'] +
+        portfolio_info['capital_bond'] +
+        portfolio_info['capital_stock']
+    )
+
     actual_ratios = {
         "Cash": portfolio_info['capital_cash'] / total_cap,
         "Bonds": portfolio_info['capital_bond'] / total_cap,
@@ -54,15 +59,30 @@ def display_portfolio_info(portfolio_info: dict):
         "Stocks": portfolio_info['alloc_stock']
     }
 
+    key_map = {
+        "Cash": "capital_cash",
+        "Bonds": "capital_bond",
+        "Stocks": "capital_stock"
+    }
+
     df_compare = pd.DataFrame([
         {
             "Asset Class": k,
             "Target Ratio": f"{target_ratios[k]*100:.1f}%",
             "Actual Ratio": f"{actual_ratios[k]*100:.1f}%",
-            "Capital (VND)": f"{portfolio_info[f'capital_{k.lower()}']:,.0f}",
-            "Difference": f"{(actual_ratios[k] - target_ratios[k])*100:.1f}%"
+            "Capital (VND)": f"{portfolio_info[key_map[k]]:,.0f}",
+            "Difference": f"{(actual_ratios[k] - target_ratios[k]) * 100:.1f}%"
         }
         for k in ["Cash", "Bonds", "Stocks"]
     ])
 
     st.dataframe(df_compare, use_container_width=True, hide_index=True)
+
+    # --- Warning if deviation > 5% absolute ---
+    large_deviation = [
+        k for k in ["Cash", "Bonds", "Stocks"]
+        if abs(actual_ratios[k] - target_ratios[k]) > 0.05
+    ]
+
+    if large_deviation:
+        st.error(f"⚠️ Allocation deviates significantly (>5%) for: {', '.join(large_deviation)}")
