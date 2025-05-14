@@ -5,9 +5,9 @@ import numpy as np
 def display_portfolio_info(portfolio_info: dict, allocation_matrix: dict, risk_level: str, time_horizon: str):
     st.markdown("### Optimal Complete Portfolio Summary")
 
+    # --- Left Column: Risk Profile & Return Stats ---
     col1, col2 = st.columns(2)
 
-    # --- Left Column: Risk Profile & Return Stats ---
     with col1:
         st.markdown(f"**Portfolio Name:** `{portfolio_info['portfolio_name']}`")
         st.markdown(f"**Risk Tolerance Score:** `{portfolio_info['risk_score']}`")
@@ -38,24 +38,21 @@ def display_portfolio_info(portfolio_info: dict, allocation_matrix: dict, risk_l
     if portfolio_info['capital_rf'] > rf_limit:
         st.warning(f"⚠️ Risk-Free allocation exceeds maximum cap ({portfolio_info['max_rf_ratio']*100:.0f}%)")
 
-    # --- Allocation Comparison ---
+    # --- Target Allocation based on Strategy ---
     st.markdown("### Target vs Actual Allocation Comparison")
 
-    # Retrieve target allocation from the allocation matrix based on risk profile and time horizon
+    # Get the target allocation based on the user's risk profile and time horizon
     target_allocation = allocation_matrix.get((risk_level, time_horizon), {"cash": 0.2, "bond": 0.4, "stock": 0.4})
 
+    # Calculate the total capital
+    total_cap = portfolio_info['capital_cash'] + portfolio_info['capital_bond'] + portfolio_info['capital_stock']
+
+    # Create a comparison between target and actual allocations
     target_ratios = {
         "Cash": target_allocation['cash'],
         "Bonds": target_allocation['bond'],
         "Stocks": target_allocation['stock']
     }
-
-    # Get actual allocation
-    total_cap = (
-        portfolio_info['capital_cash'] +
-        portfolio_info['capital_bond'] +
-        portfolio_info['capital_stock']
-    )
 
     actual_ratios = {
         "Cash": portfolio_info['capital_cash'] / total_cap,
@@ -63,13 +60,19 @@ def display_portfolio_info(portfolio_info: dict, allocation_matrix: dict, risk_l
         "Stocks": portfolio_info['capital_stock'] / total_cap
     }
 
-    # Create DataFrame to show target vs actual allocation
+    key_map = {
+        "Cash": "capital_cash",
+        "Bonds": "capital_bond",
+        "Stocks": "capital_stock"
+    }
+
+    # Create DataFrame for comparison
     df_compare = pd.DataFrame([
         {
             "Asset Class": k,
             "Target Ratio": f"{target_ratios[k]*100:.1f}%",
             "Actual Ratio": f"{actual_ratios[k]*100:.1f}%",
-            "Capital (VND)": f"{portfolio_info[f'capital_{k.lower()}']:,.0f}",
+            "Capital (VND)": f"{portfolio_info[key_map[k]]:,.0f}",
             "Difference": f"{(actual_ratios[k] - target_ratios[k]) * 100:.1f}%"
         }
         for k in ["Cash", "Bonds", "Stocks"]
@@ -77,7 +80,7 @@ def display_portfolio_info(portfolio_info: dict, allocation_matrix: dict, risk_l
 
     st.dataframe(df_compare, use_container_width=True, hide_index=True)
 
-    # --- Warning if deviation > 5% absolute ---
+    # --- Warning if deviation > 5% ---
     large_deviation = [
         k for k in ["Cash", "Bonds", "Stocks"]
         if abs(actual_ratios[k] - target_ratios[k]) > 0.05
