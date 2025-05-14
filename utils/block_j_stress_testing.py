@@ -1,10 +1,12 @@
+# utils/block_j_stress_testing.py
+
 import numpy as np
 import pandas as pd
-import streamlit as st
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import plotly.express as px
 from scipy.stats import t as t_dist
 from datetime import datetime
+import streamlit as st
 
 def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     confidence_level = 0.95
@@ -13,12 +15,6 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     t_dist_df = 4
     n_simulations = 10000
     np.random.seed(42)
-
-    # Reset index nếu chưa có cột index (tránh lỗi melt/pivot)
-    if 'index' not in latest_data.columns:
-        latest_data = latest_data.reset_index()
-    if 'index' not in data_stocks.columns:
-        data_stocks = data_stocks.reset_index()
 
     # Lấy trọng số và tickers danh mục
     weights = np.array(list(best_portfolio['Weights'].values()))
@@ -46,7 +42,6 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
             beta = beta_dict.get(t, 1.0)
             scenarios["Interest Rate Shock"][t] = base_shock * beta
             scenarios["Inflation Shock"][t] = infl_shock * beta
-            # Định nghĩa Tech Crash giảm sâu hơn cho beta lớn
             scenarios["Tech Crash"][t] = -0.25 if beta >= 1.2 else -0.15 if beta >= 1.0 else 0
         return scenarios
 
@@ -75,81 +70,93 @@ def run(best_portfolio, latest_data, data_stocks, returns_pivot_stocks, rf):
     ]
     df_sens = pd.DataFrame(sensitivity_results)
 
-    # === Plotly Figures ===
-    fig = make_subplots(
-        rows=1, cols=3,
-        subplot_titles=("Scenario Impact", "Asset Sensitivity", "Monte Carlo Return Distribution"),
-        horizontal_spacing=0.1
+    # --- Layout header ---
+    st.markdown("## Stress Testing Overview")
+
+    # --- Plot 1: Scenario Impact ---
+    fig1 = px.bar(
+        df_hypo,
+        x='Scenario',
+        y='Portfolio Return (%)',
+        title="Scenario Impact",
+        labels={'Portfolio Return (%)': 'Portfolio Return (%)'},
+        color='Portfolio Return (%)',
+        color_continuous_scale=px.colors.sequential.Reds,
+        range_y=[min(df_hypo['Portfolio Return (%)'].min(), -30), 0]
+    )
+    fig1.update_layout(
+        plot_bgcolor='#1e1e1e',
+        paper_bgcolor='#1e1e1e',
+        font_color='white',
+        coloraxis_colorbar=dict(title='Return %'),
+        xaxis_title="Scenario",
+        yaxis_title="Portfolio Return (%)",
+        margin=dict(t=40, b=40),
+        yaxis=dict(tickformat=".1f"),
     )
 
-    # Scenario Impact Bar Chart
-    fig.add_trace(go.Bar(
-        x=df_hypo['Scenario'],
-        y=df_hypo['Portfolio Return (%)'],
-        marker_color='crimson',
-        name='Scenario Impact',
-        text=df_hypo['Portfolio Return (%)'].apply(lambda x: f"{x:.2f}%"),
-        textposition='auto'
-    ), row=1, col=1)
+    # --- Plot 2: Asset Sensitivity ---
+    fig2 = px.bar(
+        df_sens,
+        x='Ticker',
+        y='Portfolio Impact (%)',
+        title="Asset Sensitivity",
+        labels={'Portfolio Impact (%)': 'Portfolio Impact (%)'},
+        color='Portfolio Impact (%)',
+        color_continuous_scale=px.colors.sequential.Blues_r,
+        range_y=[df_sens['Portfolio Impact (%)'].min() * 1.1, 0]
+    )
+    fig2.update_layout(
+        plot_bgcolor='#1e1e1e',
+        paper_bgcolor='#1e1e1e',
+        font_color='white',
+        coloraxis_colorbar=dict(title='Impact %'),
+        xaxis_title="Ticker",
+        yaxis_title="Portfolio Impact (%)",
+        margin=dict(t=40, b=40),
+        yaxis=dict(tickformat=".1f"),
+    )
 
-    # Asset Sensitivity Bar Chart
-    fig.add_trace(go.Bar(
-        x=df_sens['Ticker'],
-        y=df_sens['Portfolio Impact (%)'],
-        marker_color='royalblue',
-        name='Asset Sensitivity',
-        text=df_sens['Portfolio Impact (%)'].apply(lambda x: f"{x:.2f}%"),
-        textposition='auto'
-    ), row=1, col=2)
-
-    # Monte Carlo Return Histogram with VaR and CVaR lines
-    fig.add_trace(go.Histogram(
+    # --- Plot 3: Monte Carlo Return Distribution ---
+    fig3 = px.histogram(
         x=returns_sim * 100,
-        nbinsx=50,
-        name='Return Distribution',
-        marker_color='purple',
-        opacity=0.8
-    ), row=1, col=3)
-
-    # Add VaR and CVaR vertical lines
-    fig.add_vline(
-        x=-stress_var * 100,
-        line=dict(color='red', width=3, dash='dash'),
-        annotation_text=f"VaR {int(confidence_level*100)}%: {-stress_var*100:.2f}%",
-        annotation_position="top left"
+        nbins=50,
+        title="Monte Carlo Return Distribution",
+        labels={'x': 'Portfolio Return (%)', 'count': 'Frequency'},
+        color_discrete_sequence=['purple']
     )
-    fig.add_vline(
-        x=-stress_cvar * 100,
-        line=dict(color='orange', width=3, dash='dash'),
-        annotation_text=f"CVaR {int(confidence_level*100)}%: {-stress_cvar*100:.2f}%",
-        annotation_position="top right"
-    )
-
-    # Layout and style
-    fig.update_layout(
-        height=450,
-        plot_bgcolor='#121212',
-        paper_bgcolor='#121212',
-        font=dict(color='white'),
-        showlegend=False,
-        margin=dict(t=60, b=40, l=30, r=30)
+    fig3.add_vline(x=-stress_var * 100, line_dash='dash', line_color='red',
+                   annotation_text=f"VaR {int(confidence_level*100)}%: {-stress_var*100:.2f}%", annotation_position="top right",
+                   annotation_font_color='red')
+    fig3.add_vline(x=-stress_cvar * 100, line_dash='dash', line_color='orange',
+                   annotation_text=f"CVaR {int(confidence_level*100)}%: {-stress_cvar*100:.2f}%", annotation_position="top right",
+                   annotation_font_color='orange')
+    fig3.update_layout(
+        plot_bgcolor='#1e1e1e',
+        paper_bgcolor='#1e1e1e',
+        font_color='white',
+        margin=dict(t=40, b=40),
+        yaxis=dict(title='Frequency'),
+        xaxis=dict(title='Portfolio Return (%)', tickformat=".1f"),
     )
 
-    fig.update_xaxes(title_text="Portfolio Return (%)", row=1, col=3, color='white')
-    fig.update_yaxes(title_text="Frequency", row=1, col=3, color='white')
+    # --- Display plots side-by-side ---
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.plotly_chart(fig1, use_container_width=True)
+    with col2:
+        st.plotly_chart(fig2, use_container_width=True)
+    with col3:
+        st.plotly_chart(fig3, use_container_width=True)
 
-    fig.update_xaxes(color='white')
-    fig.update_yaxes(color='white')
-
-    st.markdown("### Stress Testing Overview")
-    st.plotly_chart(fig, use_container_width=True)
-
-    # === Summary Table ===
+    # --- Summary Table ---
     summary = pd.DataFrame({
         'Type': ['Historical Shock', f'Monte Carlo VaR ({int(confidence_level*100)}%)', f'Monte Carlo CVaR ({int(confidence_level*100)}%)'],
         'Portfolio Drop (%)': [portfolio_drop_hist * 100, stress_var * 100, stress_cvar * 100],
         'Generated At': datetime.now().strftime('%Y-%m-%d %H:%M')
     })
+
+    st.markdown("### Stress Testing Summary")
     st.dataframe(summary.round(2), use_container_width=True)
 
     return summary
