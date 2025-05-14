@@ -38,20 +38,31 @@ def display_portfolio_info(portfolio_info: dict):
     if portfolio_info['capital_rf'] > rf_limit:
         st.warning(f"⚠️ Risk-Free allocation exceeds maximum cap ({portfolio_info['max_rf_ratio']*100:.0f}%)")
 
-    # --- Bảng chi tiết phân bổ ---
-    st.markdown("### Target Asset Class Allocation")
-    breakdown_df = pd.DataFrame({
-        "Asset Class": ["Cash", "Bonds", "Stocks"],
-        "Target Ratio": [
-            f"{portfolio_info['alloc_cash'] * 100:.1f}%",
-            f"{portfolio_info['alloc_bond'] * 100:.1f}%",
-            f"{portfolio_info['alloc_stock'] * 100:.1f}%"
-        ],
-        "Capital (VND)": [
-            f"{portfolio_info['capital_cash']:,.0f}",
-            f"{portfolio_info['capital_bond']:,.0f}",
-            f"{portfolio_info['capital_stock']:,.0f}"
-        ]
-    })
+    # --- Phân tích chi tiết phân bổ tài sản ---
+    st.markdown("### Target vs Actual Allocation Comparison")
 
-    st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
+    total_cap = portfolio_info['capital_cash'] + portfolio_info['capital_bond'] + portfolio_info['capital_stock']
+    actual_ratios = {
+        "Cash": portfolio_info['capital_cash'] / total_cap,
+        "Bonds": portfolio_info['capital_bond'] / total_cap,
+        "Stocks": portfolio_info['capital_stock'] / total_cap
+    }
+
+    target_ratios = {
+        "Cash": portfolio_info['alloc_cash'],
+        "Bonds": portfolio_info['alloc_bond'],
+        "Stocks": portfolio_info['alloc_stock']
+    }
+
+    df_compare = pd.DataFrame([
+        {
+            "Asset Class": k,
+            "Target Ratio": f"{target_ratios[k]*100:.1f}%",
+            "Actual Ratio": f"{actual_ratios[k]*100:.1f}%",
+            "Capital (VND)": f"{portfolio_info[f'capital_{k.lower()}']:,.0f}",
+            "Difference": f"{(actual_ratios[k] - target_ratios[k])*100:.1f}%"
+        }
+        for k in ["Cash", "Bonds", "Stocks"]
+    ])
+
+    st.dataframe(df_compare, use_container_width=True, hide_index=True)
