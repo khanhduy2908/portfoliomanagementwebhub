@@ -47,16 +47,16 @@ def display_portfolio_info(portfolio_info: dict):
         portfolio_info['capital_stock']
     )
 
-    actual_ratios = {
-        "Cash": portfolio_info['capital_cash'] / total_cap,
-        "Bonds": portfolio_info['capital_bond'] / total_cap,
-        "Stocks": portfolio_info['capital_stock'] / total_cap
+    target_ratios = {
+        "Cash": portfolio_info['target_cash_ratio'],
+        "Bonds": portfolio_info['target_bond_ratio'],
+        "Stocks": portfolio_info['target_stock_ratio']
     }
 
-    target_ratios = {
-        "Cash": portfolio_info['alloc_cash'],
-        "Bonds": portfolio_info['alloc_bond'],
-        "Stocks": portfolio_info['alloc_stock']
+    actual_ratios = {
+        "Cash": portfolio_info['actual_cash_ratio'],
+        "Bonds": portfolio_info['actual_bond_ratio'],
+        "Stocks": portfolio_info['actual_stock_ratio']
     }
 
     key_map = {
