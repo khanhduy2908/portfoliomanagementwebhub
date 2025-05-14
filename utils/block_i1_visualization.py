@@ -7,29 +7,34 @@ import plotly.figure_factory as ff
 def run(returns_df, tickers, rf_monthly, start_date, end_date):
     st.subheader("Asset-Level Risk & Performance")
 
+    # Chuẩn hóa index và lọc dữ liệu theo khoảng thời gian user chọn
     returns_df.index = pd.to_datetime(returns_df.index)
-    df = returns_df[tickers].copy()
-    df = df.loc[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))]
+    df = returns_df.loc[(returns_df.index >= pd.to_datetime(start_date)) & (returns_df.index <= pd.to_datetime(end_date)), tickers].copy()
 
     if df.empty:
         st.error("No return data available for the selected date range.")
         return
 
+    # Tính toán các chỉ số
     monthly_returns = df / 100
     cum_returns = (1 + monthly_returns).cumprod()
     ann_returns = monthly_returns.mean() * 12
     ann_volatility = monthly_returns.std() * np.sqrt(12)
     sharpe_ratios = (ann_returns - rf_monthly) / ann_volatility
 
+    # Drawdown
     cumulative_max = cum_returns.cummax()
     drawdown = cum_returns / cumulative_max - 1
 
+    # Rolling Sharpe Ratio (12 tháng)
     rolling_sharpe = (monthly_returns - rf_monthly).rolling(12).mean() / monthly_returns.rolling(12).std()
     rolling_sharpe = rolling_sharpe.dropna()
 
+    # Rolling Volatility (12 tháng)
     rolling_volatility = monthly_returns.rolling(12).std() * np.sqrt(12)
     rolling_volatility = rolling_volatility.dropna()
 
+    # Contribution to Risk (Marginal contribution by variance)
     cov_matrix = monthly_returns.cov()
     portfolio_weights = np.array([1/len(tickers)]*len(tickers))  # giả định cân bằng
     port_variance = portfolio_weights.T @ cov_matrix.values @ portfolio_weights
@@ -41,8 +46,10 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
         'Risk Contribution (%)': contribution_risk * 100
     }).sort_values(by='Risk Contribution (%)', ascending=False)
 
+    # Correlation heatmap
     corr_matrix = monthly_returns.corr()
 
+    # === Bố cục 3 hàng 2 cột ===
     row1_col1, row1_col2 = st.columns(2)
     row2_col1, row2_col2 = st.columns(2)
     row3_col1, row3_col2 = st.columns(2)
@@ -57,7 +64,12 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
             title='Cumulative Returns',
             labels={'Date': 'Date', 'Cumulative Return': 'Growth Index'}
         )
-        fig_cum.update_layout(plot_bgcolor='#1e1e1e', paper_bgcolor='#1e1e1e', font_color='white', legend=dict(bgcolor='#1e1e1e'))
+        fig_cum.update_layout(
+            plot_bgcolor='#1e1e1e',
+            paper_bgcolor='#1e1e1e',
+            font_color='white',
+            legend=dict(bgcolor='#1e1e1e')
+        )
         st.plotly_chart(fig_cum, use_container_width=True)
 
     # Drawdown
@@ -70,7 +82,12 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
             title='Drawdown (%)',
             labels={'Date': 'Date', 'Drawdown': 'Drawdown'}
         )
-        fig_dd.update_layout(plot_bgcolor='#1e1e1e', paper_bgcolor='#1e1e1e', font_color='white', legend=dict(bgcolor='#1e1e1e'))
+        fig_dd.update_layout(
+            plot_bgcolor='#1e1e1e',
+            paper_bgcolor='#1e1e1e',
+            font_color='white',
+            legend=dict(bgcolor='#1e1e1e')
+        )
         st.plotly_chart(fig_dd, use_container_width=True)
 
     # Rolling Sharpe Ratio
@@ -83,8 +100,13 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
             title='12-Month Rolling Sharpe Ratio',
             labels={'Date': 'Date', 'Rolling Sharpe Ratio': 'Rolling Sharpe Ratio'}
         )
-        fig_rs.update_layout(plot_bgcolor='#1e1e1e', paper_bgcolor='#1e1e1e', font_color='white', legend=dict(bgcolor='#1e1e1e'),
-                             xaxis=dict(tickangle=-40))
+        fig_rs.update_layout(
+            plot_bgcolor='#1e1e1e',
+            paper_bgcolor='#1e1e1e',
+            font_color='white',
+            legend=dict(bgcolor='#1e1e1e'),
+            xaxis=dict(tickangle=-40)
+        )
         st.plotly_chart(fig_rs, use_container_width=True)
 
     # Rolling Volatility
@@ -97,19 +119,32 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
             title='12-Month Rolling Volatility',
             labels={'Date': 'Date', 'Rolling Volatility': 'Rolling Volatility'}
         )
-        fig_rv.update_layout(plot_bgcolor='#1e1e1e', paper_bgcolor='#1e1e1e', font_color='white', legend=dict(bgcolor='#1e1e1e'),
-                             xaxis=dict(tickangle=-40))
+        fig_rv.update_layout(
+            plot_bgcolor='#1e1e1e',
+            paper_bgcolor='#1e1e1e',
+            font_color='white',
+            legend=dict(bgcolor='#1e1e1e'),
+            xaxis=dict(tickangle=-40)
+        )
         st.plotly_chart(fig_rv, use_container_width=True)
 
-    # Contribution to Risk
+    # Contribution to Risk (Bar chart đẹp mắt)
     with row3_col1:
         fig_risk = px.bar(
             df_contrib_risk,
             x='Ticker', y='Risk Contribution (%)',
             title='Contribution to Portfolio Risk (%)',
-            labels={'Risk Contribution (%)': 'Risk Contribution (%)'}
+            labels={'Risk Contribution (%)': 'Risk Contribution (%)'},
+            color='Risk Contribution (%)',
+            color_continuous_scale=px.colors.sequential.Plasma
         )
-        fig_risk.update_layout(plot_bgcolor='#1e1e1e', paper_bgcolor='#1e1e1e', font_color='white')
+        fig_risk.update_layout(
+            plot_bgcolor='#1e1e1e',
+            paper_bgcolor='#1e1e1e',
+            font_color='white',
+            coloraxis_colorbar=dict(title="Risk Contribution (%)"),
+            legend=dict(bgcolor='#1e1e1e')
+        )
         st.plotly_chart(fig_risk, use_container_width=True)
 
     # Correlation Heatmap
@@ -124,6 +159,10 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
             showscale=True,
             font_colors=['white']
         )
-        heatmap.update_layout(plot_bgcolor='#1e1e1e', paper_bgcolor='#1e1e1e', font_color='white',
-                              title_text='Correlation Heatmap')
+        heatmap.update_layout(
+            plot_bgcolor='#1e1e1e',
+            paper_bgcolor='#1e1e1e',
+            font_color='white',
+            title_text='Correlation Heatmap'
+        )
         st.plotly_chart(heatmap, use_container_width=True)
