@@ -244,8 +244,12 @@ if run_analysis:
 
             # H2. Capital allocation visualization
             st.session_state["target_stock_ratio"] = config.alloc_stock
-            block_h2_visualization.run(capital_alloc=capital_alloc, capital_cash=portfolio_info['capital_cash'], capital_bond=portfolio_info['capital_bond'], capital_stock=portfolio_info['capital_risky'], tickers=tickers_portfolio)
-            
+            block_h2_visualization.run(
+                portfolio_info=portfolio_info,
+                capital_alloc=capital_alloc,
+                tickers=tickers_portfolio
+            )
+
             # H3. Efficient Frontier with Capital Allocation Line
             benchmark_return_mean = returns_benchmark['Benchmark_Return'].mean()
             block_h3_visualization.run(
