@@ -71,7 +71,7 @@ benchmark_user = st.sidebar.selectbox(
 start_user = st.sidebar.date_input("Backtest Start Date", datetime.date(2020, 1, 1))
 end_user = st.sidebar.date_input("Backtest End Date", datetime.date.today())
 
-capital_user = st.sidebar.number_input("Total Capital (VND)", value=750_000_000)
+capital_user = st.sidebar.number_input("Total Capital (VND)", value=1_000_000_000)
 rf_user = st.sidebar.number_input("Annual Risk-Free Rate (%)", value=9.0) / 100
 
 # ================================
