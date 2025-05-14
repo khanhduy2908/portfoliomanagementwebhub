@@ -2,7 +2,7 @@ import numpy as np
 from scipy.optimize import minimize_scalar
 
 # --- Tính tỷ lệ tối đa cho risk-free asset dựa theo Risk Score và A ---
-def get_max_rf_ratio(score, A):
+def get_max_rf_ratio(score, A, alloc_cash, alloc_bond, alloc_stock):
     if 10 <= score <= 17:
         hard_cap = 0.40
     elif 18 <= score <= 27:
@@ -12,7 +12,6 @@ def get_max_rf_ratio(score, A):
     else:
         raise ValueError("Risk score must be between 10 and 40.")
 
-    # Nội suy tuyến tính theo A
     if A >= 25:
         suggested = 0.40
     elif A <= 2:
@@ -20,7 +19,9 @@ def get_max_rf_ratio(score, A):
     else:
         suggested = 0.02 + (A - 2) * ((0.40 - 0.02) / (25 - 2))
 
-    return min(hard_cap, suggested)
+    # Không vượt quá tổng mục tiêu cash + bond + phần stock chưa đầu tư
+    max_target_rf = alloc_cash + alloc_bond + 0.4 * alloc_stock
+    return min(hard_cap, suggested, max_target_rf)
 
 # --- Hàm chính: Tối ưu phân bổ danh mục hoàn chỉnh theo y* ---
 def run(
@@ -55,7 +56,7 @@ def run(
     capital_stock = alloc_stock * total_capital
 
     # --- Giới hạn y theo risk-free cap ---
-    max_rf_ratio = get_max_rf_ratio(risk_score, A)
+    max_rf_ratio = get_max_rf_ratio(risk_score, A, alloc_cash, alloc_bond, alloc_stock)
     upper_bound = min(y_max, 1 - max_rf_ratio)
     if upper_bound <= y_min:
         y_min = max(0.01, upper_bound - 0.01)
