@@ -1,9 +1,6 @@
-# utils/block_i_performance_analysis.py
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
 import streamlit as st
 
 def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
@@ -11,34 +8,37 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         data_stocks, data_benchmark, benchmark_symbol,
         weights, tickers_portfolio, start_date, end_date):
 
-    # --- Re-align index ---
+    # --- Chuẩn hoá index, chọn khung thời gian ---
     returns_pivot_stocks.index = pd.to_datetime(returns_pivot_stocks.index)
     returns_benchmark.index = pd.to_datetime(returns_benchmark.index)
     date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
     common_index = date_range.intersection(returns_pivot_stocks.index)
 
     if common_index.empty:
-        raise ValueError("❌ No return data available for the selected date range.")
+        st.error("❌ No return data available for the selected date range.")
+        return None
 
     returns_pivot_stocks = returns_pivot_stocks.loc[common_index]
     returns_benchmark = returns_benchmark.loc[common_index]
 
-    # --- Portfolio returns ---
+    # --- Tính toán lợi nhuận danh mục và benchmark ---
     portfolio_returns = returns_pivot_stocks[tickers_portfolio] @ weights
     benchmark_returns = returns_benchmark['Benchmark_Return']
 
-    # --- Cumulative returns ---
+    # --- Tính tích luỹ lợi nhuận ---
     cumulative_returns = (1 + portfolio_returns / 100).cumprod()
     benchmark_cumulative = (1 + benchmark_returns / 100).cumprod()
     cumulative_returns /= cumulative_returns.iloc[0]
     benchmark_cumulative /= benchmark_cumulative.iloc[0]
 
-    # --- Performance metrics ---
+    # --- Các chỉ số hiệu suất ---
     mean_return = portfolio_returns.mean()
     volatility = portfolio_returns.std()
     sharpe_ratio = (mean_return - rf * 100) / volatility if volatility > 0 else np.nan
+
     downside = portfolio_returns[portfolio_returns < rf * 100]
     sortino_ratio = (mean_return - rf * 100) / downside.std() if not downside.empty else np.nan
+
     drawdown = cumulative_returns / cumulative_returns.cummax() - 1
     max_drawdown = drawdown.min()
 
@@ -46,11 +46,11 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
     cagr = cumulative_returns.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
     calmar_ratio = cagr / abs(max_drawdown) if max_drawdown != 0 else np.nan
 
-    # --- Rolling Sharpe Ratio ---
+    # --- Rolling Sharpe Ratio 12 tháng ---
     rolling_sharpe = (portfolio_returns - rf * 100).rolling(12).mean() / portfolio_returns.rolling(12).std()
     rolling_sharpe = rolling_sharpe.dropna()
 
-    # --- Summary table ---
+    # --- Tóm tắt hiệu suất so với benchmark ---
     benchmark_cagr = benchmark_cumulative.iloc[-1]**(1 / years) - 1 if years > 0 else np.nan
     summary_df = pd.DataFrame({
         'Metric': ['Mean Return (%)', 'Volatility (%)', 'Sharpe Ratio', 'Sortino Ratio',
@@ -68,7 +68,7 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
         ]
     })
 
-    # --- Visualizations ---
+    # --- Vẽ biểu đồ hiệu suất ---
     st.subheader("Cumulative Returns")
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     fig1.patch.set_facecolor('#121212')
@@ -87,7 +87,6 @@ def run(best_portfolio, returns_pivot_stocks, returns_benchmark,
 
     with col1:
         st.subheader("Drawdown (%)")
-        drawdown.index = pd.to_datetime(drawdown.index)
         fig2, ax2 = plt.subplots(figsize=(6, 3))
         fig2.patch.set_facecolor('#121212')
         ax2.set_facecolor('#121212')
