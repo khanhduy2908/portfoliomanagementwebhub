@@ -25,7 +25,7 @@ def run(
     hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     rf, A, total_capital, risk_score,
     alloc_cash, alloc_bond, alloc_stock,
-    y_min=0.6, y_max=0.9, time_horizon=None):  # Add time_horizon
+    y_min=0.6, y_max=0.9, time_horizon=None, target_allocation=None):  # Add time_horizon
 
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
