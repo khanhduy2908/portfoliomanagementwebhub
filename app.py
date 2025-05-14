@@ -247,7 +247,10 @@ if run_analysis:
             block_h2_visualization.run(
                 portfolio_info=portfolio_info,
                 capital_alloc=capital_alloc,
-                tickers=tickers_portfolio
+                tickers=tickers_portfolio,
+                allocation_matrix=allocation_matrix,
+                risk_level=risk_level,
+                time_horizon=time_horizon_input
             )
 
             # H3. Efficient Frontier with Capital Allocation Line
