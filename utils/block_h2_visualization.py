@@ -5,6 +5,7 @@ import pandas as pd
 def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_stock: float, tickers: list):
     st.markdown("### Asset Allocation Overview")
 
+    # Kiểm tra xem dữ liệu đầu vào có hợp lệ không
     if not capital_alloc or not tickers:
         st.warning("⚠️ Missing capital allocation or tickers.")
         return
@@ -12,7 +13,7 @@ def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_s
     # === Tính tổng vốn cổ phiếu thực tế ===
     capital_from_stocks = sum([capital_alloc.get(t, 0) for t in tickers])
     if abs(capital_stock - capital_from_stocks) > 1:
-        capital_stock = capital_from_stocks
+        capital_stock = capital_from_stocks  # Cập nhật lại nếu có sự khác biệt
 
     # === Tổng vốn đầu tư ===
     sizes = [capital_cash, capital_bond] + [capital_alloc.get(t, 0) for t in tickers]
@@ -26,7 +27,7 @@ def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_s
     # === Tính phần trăm phân bổ ===
     percentages = [s / total * 100 for s in sizes]
 
-    # === Biểu đồ và bảng ===
+    # === Biểu đồ và bảng phân bổ ===
     col1, col2 = st.columns([2, 1])
 
     with col1:
