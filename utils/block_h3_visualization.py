@@ -1,3 +1,5 @@
+# utils/block_h3_visualization.py
+
 import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
@@ -40,7 +42,6 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
         sharpe_sim = (mu_sim - rf) / sigma_sim
 
-        # Filter: valid values (no Sharpe > 0 filter!)
         mask = (sigma_sim > 0.0001) & (mu_sim > 0.0001) & np.isfinite(sharpe_sim)
         mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
     else:
@@ -57,7 +58,6 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         cbar.ax.tick_params(labelsize=9, colors='white')
         plt.setp(cbar.ax.get_yticklabels(), color='white')
 
-    # Key portfolio points
     ax.scatter(0, rf * 100, c='blue', s=100, label=f"Risk-Free Rate ({rf * 100:.2f}%)")
     ax.scatter(sigma_p * 100, mu_p * 100, c='red', marker='*', s=180,
                label=f"Optimal Risky Portfolio ({'-'.join(tickers)})")
@@ -70,14 +70,12 @@ def run(best_portfolio, mu_p, sigma_p, rf, sigma_c, expected_rc, y_capped, y_opt
         ax.scatter(sigma_uncapped * 100, rc_uncapped * 100, c='magenta', marker='X', s=140,
                    label=f"Leveraged Portfolio (y={y_opt:.2f})")
 
-    # CAL line
     slope = (mu_p - rf) / sigma_p
     max_x = sigma_sim.max() * 100 * 1.3 if len(sigma_sim) > 0 else sigma_p * 150
     x_cal = np.linspace(0, max_x, 200)
     y_cal = rf * 100 + slope * x_cal
     ax.plot(x_cal, y_cal, 'r--', linewidth=2, label="Capital Allocation Line (CAL)")
 
-    # Styling
     ax.set_title("Efficient Frontier with Optimal Complete Portfolio", fontsize=14, color='white')
     ax.set_xlabel("Volatility (%)", fontsize=12, color='white')
     ax.set_ylabel("Expected Return (%)", fontsize=12, color='white')
