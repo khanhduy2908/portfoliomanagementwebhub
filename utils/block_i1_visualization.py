@@ -1,11 +1,13 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
 
 def run(returns_df, tickers, rf_monthly, start_date, end_date):
     st.subheader("Asset-Level Risk & Performance")
 
-    # Lọc dữ liệu theo khoảng thời gian
+    # Lọc dữ liệu theo khoảng thời gian, chuyển index về dạng datetime nếu chưa có
+    returns_df.index = pd.to_datetime(returns_df.index)
     df = returns_df[tickers].copy()
     df = df.loc[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))]
 
@@ -17,10 +19,10 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
     monthly_returns = df / 100
     cum_returns = (1 + monthly_returns).cumprod()
     ann_returns = monthly_returns.mean() * 12
-    ann_volatility = monthly_returns.std() * (12 ** 0.5)
+    ann_volatility = monthly_returns.std() * np.sqrt(12)
     sharpe_ratios = (ann_returns - rf_monthly) / ann_volatility
 
-    # Biểu đồ Cumulative Return
+    # --- Biểu đồ Cumulative Return ---
     cum_returns.index.name = 'Date'
     cum_returns_reset = cum_returns.reset_index().melt(id_vars='Date', var_name='Ticker', value_name='Cumulative Return')
     fig1 = px.line(
@@ -35,17 +37,22 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
         plot_bgcolor='#1e1e1e',
         paper_bgcolor='#1e1e1e',
         font_color='white',
-        legend=dict(bgcolor='#1e1e1e')
+        legend=dict(bgcolor='#1e1e1e'),
+        margin=dict(l=40, r=40, t=50, b=40)
     )
     st.plotly_chart(fig1, use_container_width=True)
 
-    # Biểu đồ Risk-Return Bubble Chart
+    # --- Biểu đồ Risk-Return Bubble Chart ---
     df_metrics = pd.DataFrame({
         'Ticker': tickers,
         'Annual Return (%)': ann_returns * 100,
         'Annual Volatility (%)': ann_volatility * 100,
         'Sharpe Ratio': sharpe_ratios
     })
+
+    # Đảm bảo không có giá trị NaN hoặc vô hạn
+    df_metrics = df_metrics.replace([np.inf, -np.inf], np.nan).dropna(subset=['Annual Return (%)', 'Annual Volatility (%)', 'Sharpe Ratio'])
+
     fig2 = px.scatter(
         df_metrics,
         x='Annual Volatility (%)',
@@ -62,17 +69,19 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
         paper_bgcolor='#1e1e1e',
         font_color='white',
         coloraxis_colorbar=dict(title="Sharpe Ratio"),
-        legend=dict(bgcolor='#1e1e1e')
+        legend=dict(bgcolor='#1e1e1e'),
+        margin=dict(l=40, r=40, t=50, b=40)
     )
     st.plotly_chart(fig2, use_container_width=True)
 
-    # Biểu đồ Rolling Sharpe Ratio (12 tháng) với trục x nghiêng -40 độ
+    # --- Biểu đồ Rolling Sharpe Ratio (12 tháng) với trục x nghiêng -40 độ ---
     rolling_sharpe = (monthly_returns - rf_monthly).rolling(12).mean() / monthly_returns.rolling(12).std()
     rolling_sharpe = rolling_sharpe.dropna()
 
     if not rolling_sharpe.empty:
         rolling_sharpe.index.name = 'Date'
         rolling_df = rolling_sharpe.reset_index().melt(id_vars='Date', var_name='Ticker', value_name='Rolling Sharpe Ratio')
+
         fig3 = px.line(
             rolling_df,
             x='Date',
@@ -86,7 +95,8 @@ def run(returns_df, tickers, rf_monthly, start_date, end_date):
             paper_bgcolor='#1e1e1e',
             font_color='white',
             legend=dict(bgcolor='#1e1e1e'),
-            xaxis=dict(tickangle=-40)
+            xaxis=dict(tickangle=-40),
+            margin=dict(l=40, r=40, t=50, b=40)
         )
         st.plotly_chart(fig3, use_container_width=True)
     else:
