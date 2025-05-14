@@ -1,7 +1,3 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-
 def display_portfolio_info(portfolio_info: dict, allocation_matrix: dict, risk_level: str, time_horizon: str):
     st.markdown("### Optimal Complete Portfolio Summary")
 
