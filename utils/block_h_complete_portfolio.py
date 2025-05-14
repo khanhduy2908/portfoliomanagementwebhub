@@ -9,7 +9,7 @@ def get_max_rf_ratio(score, A, alloc_cash, alloc_bond, alloc_stock):
     elif 28 <= score <= 40:
         hard_cap = 0.10
     else:
-        raise ValueError("Risk score must be between 10 and 40.")
+        raise ValueError("Invalid risk score.")
 
     if A >= 25:
         suggested = 0.40
@@ -43,7 +43,9 @@ def run(
     mu_p = weights @ mu
     sigma_p = np.sqrt(weights.T @ cov @ weights)
 
-    # Initial capital allocation
+    if mu_p <= 0 or sigma_p <= 0:
+        raise ValueError("❌ Risky portfolio has invalid return or volatility.")
+
     capital_cash = alloc_cash * total_capital
     capital_bond = alloc_bond * total_capital
     capital_stock = alloc_stock * total_capital
@@ -73,44 +75,28 @@ def run(
         capital_rf_total = rf_cap_limit
         y_capped = capital_risky / capital_stock if capital_stock > 0 else 0
 
-    # === Actual allocation computation
-    rf_share_total = alloc_cash + alloc_bond
-    rf_cash_share = alloc_cash / rf_share_total if rf_share_total > 0 else 0.5
-    rf_bond_share = alloc_bond / rf_share_total if rf_share_total > 0 else 0.5
+    # === Tính lại tỷ trọng thực tế ===
+    actual_cash_ratio = (capital_cash + capital_rf_internal * alloc_cash / (alloc_cash + alloc_bond)) / total_capital
+    actual_bond_ratio = (capital_bond + capital_rf_internal * alloc_bond / (alloc_cash + alloc_bond)) / total_capital
+    actual_stock_ratio = capital_risky / total_capital
 
-    capital_cash_actual = capital_cash + capital_rf_internal * rf_cash_share
-    capital_bond_actual = capital_bond + capital_rf_internal * rf_bond_share
-    capital_stock_actual = capital_risky
+    # === Tự động hiệu chỉnh nếu lệch quá 5% so với target ===
+    def clip_ratio(r, target): return min(max(r, target - 0.05), target + 0.05)
 
-    actual_cash_ratio = capital_cash_actual / total_capital
-    actual_bond_ratio = capital_bond_actual / total_capital
-    actual_stock_ratio = capital_stock_actual / total_capital
+    actual_cash_ratio = clip_ratio(actual_cash_ratio, alloc_cash)
+    actual_bond_ratio = clip_ratio(actual_bond_ratio, alloc_bond)
+    actual_stock_ratio = clip_ratio(actual_stock_ratio, alloc_stock)
 
-    # === Fix deviation if > 5% by rebalance
-    allocation_warnings = []
-    for actual, target, label in zip(
-        [actual_cash_ratio, actual_bond_ratio, actual_stock_ratio],
-        [alloc_cash, alloc_bond, alloc_stock],
-        ["Cash", "Bond", "Stock"]
-    ):
-        deviation = abs(actual - target)
-        if deviation > 0.05:
-            allocation_warnings.append((label, actual, target))
+    total_adjusted = actual_cash_ratio + actual_bond_ratio + actual_stock_ratio
+    actual_cash_ratio /= total_adjusted
+    actual_bond_ratio /= total_adjusted
+    actual_stock_ratio /= total_adjusted
 
-    # If any deviation > 5%, normalize actuals toward targets proportionally
-    if allocation_warnings:
-        adj_total = capital_cash_actual + capital_bond_actual + capital_stock_actual
-        adj_cash = total_capital * alloc_cash
-        adj_bond = total_capital * alloc_bond
-        adj_stock = total_capital * alloc_stock
-
-        capital_cash_actual = adj_cash
-        capital_bond_actual = adj_bond
-        capital_stock_actual = adj_stock
-
-        capital_rf_total = capital_cash_actual + capital_bond_actual - capital_rf_internal
-        capital_risky = capital_stock_actual
-        y_capped = capital_risky / capital_stock if capital_stock > 0 else y_capped
+    capital_cash = total_capital * actual_cash_ratio
+    capital_bond = total_capital * actual_bond_ratio
+    capital_stock = total_capital * actual_stock_ratio
+    capital_risky = capital_stock * y_capped
+    capital_rf_total = capital_cash + capital_bond + capital_stock * (1 - y_capped)
 
     expected_rc = (
         capital_stock * (y_capped * mu_p + (1 - y_capped) * rf) +
@@ -137,20 +123,19 @@ def run(
         'utility': utility,
         'capital_risky': capital_risky,
         'capital_rf': capital_rf_total,
-        'capital_cash': capital_cash_actual,
-        'capital_bond': capital_bond_actual,
-        'capital_stock': capital_stock_actual,
+        'capital_cash': capital_cash,
+        'capital_bond': capital_bond,
+        'capital_stock': capital_stock,
         'alloc_cash': alloc_cash,
         'alloc_bond': alloc_bond,
         'alloc_stock': alloc_stock,
-        'max_rf_ratio': max_rf_ratio,
         'actual_cash_ratio': actual_cash_ratio,
         'actual_bond_ratio': actual_bond_ratio,
         'actual_stock_ratio': actual_stock_ratio,
         'target_cash_ratio': alloc_cash,
         'target_bond_ratio': alloc_bond,
         'target_stock_ratio': alloc_stock,
-        'allocation_warnings': allocation_warnings
+        'max_rf_ratio': max_rf_ratio
     }
 
     return (
