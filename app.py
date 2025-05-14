@@ -222,7 +222,7 @@ if run_analysis:
             st.success("Step G – HRP + CVaR portfolio optimization executed.")
 
             # G1. Evaluate custom bond from user input
-            bond_return, bond_volatility, bond_label = bond_model.run(
+            bond_return, bond_volatility, bond_label = block_g1_bond_model_advanced.run(
                 bond_price=bond_price,
                 coupon_rate=bond_coupon,
                 face_value=bond_face,
