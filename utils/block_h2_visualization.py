@@ -5,7 +5,6 @@ import pandas as pd
 def run(capital_alloc: dict, capital_cash: float, capital_bond: float, capital_stock: float, tickers: list):
     st.markdown("### Asset Allocation Overview")
 
-    # Kiểm tra xem dữ liệu đầu vào có hợp lệ không
     if not capital_alloc or not tickers:
         st.warning("⚠️ Missing capital allocation or tickers.")
         return
