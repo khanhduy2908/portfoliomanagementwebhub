@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize_scalar, minimize
 
 def optimize_allocation(
     best_portfolio, mu, cov, rf, A, total_capital,
@@ -31,6 +31,7 @@ def optimize_allocation(
             smooth_penalty(w_bond, target_alloc['bond'], margin) +
             smooth_penalty(w_stock, target_alloc['stock'], margin)
         )
+
         return -u + penalty
 
     constraints = ({
@@ -61,10 +62,32 @@ def optimize_allocation(
 
     capital_alloc = {t: w_stock_opt * total_capital * w for t, w in best_portfolio['Weights'].items()}
 
-    # Trả về y_opt (tỷ lệ đầu tư rủi ro tối ưu) để app dùng
-    y_opt = w_stock_opt
+    return (
+        w_cash_opt,
+        w_bond_opt,
+        w_stock_opt,
+        capital_cash,
+        capital_bond,
+        capital_stock,
+        capital_alloc
+    )
 
-    return w_cash_opt, w_bond_opt, w_stock_opt, capital_cash, capital_bond, capital_stock, capital_alloc, y_opt
+
+def optimize_y_opt(mu_p, sigma_p, rf, A, y_min=0.6, y_max=0.9):
+    """
+    Tối ưu y_opt (tỷ trọng rủi ro chưa giới hạn) trên CAL
+    """
+    def neg_utility(y):
+        expected_return = y * mu_p + (1 - y) * rf
+        volatility = y * sigma_p
+        return -(expected_return - 0.5 * A * volatility ** 2)
+
+    res = minimize_scalar(neg_utility, bounds=(y_min, y_max), method='bounded', options={'xatol':1e-6})
+    if not res.success:
+        raise ValueError(f"Optimization of y_opt failed: {res.message}")
+
+    return res.x
+
 
 def run(
     hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
@@ -90,19 +113,19 @@ def run(
         'stock': alloc_stock
     }
 
-    w_cash, w_bond, w_stock, capital_cash, capital_bond, capital_stock, capital_alloc, y_opt = optimize_allocation(
-        best_portfolio, mu, cov, rf, A, total_capital,
-        target_alloc, margin=margin
-    )
-
+    # Tối ưu y_opt trước
     weights = np.array([best_portfolio['Weights'][t] for t in tickers])
     weights /= weights.sum()
-
     mu_p = weights @ mu
     sigma_p = np.sqrt(weights.T @ cov @ weights)
 
-    if mu_p <= 0 or sigma_p <= 0:
-        raise ValueError("❌ Risky portfolio has invalid return or volatility.")
+    y_opt = optimize_y_opt(mu_p, sigma_p, rf, A, y_min, y_max)
+
+    # Tối ưu allocation với penalty margin
+    w_cash, w_bond, w_stock, capital_cash, capital_bond, capital_stock, capital_alloc = optimize_allocation(
+        best_portfolio, mu, cov, rf, A, total_capital,
+        target_alloc, margin=margin
+    )
 
     expected_rc = (
         capital_stock * mu_p +
@@ -144,18 +167,18 @@ def run(
     }
 
     return (
-        best_portfolio,
-        w_stock,
-        capital_alloc,
-        sigma_c,
-        expected_rc,
-        weights,
-        tickers,
-        portfolio_info,
-        sigma_p,
-        mu,
-        mu_p,
-        cov,
-        w_cash,
-        y_opt
+        best_portfolio,    # 1
+        w_stock,           # 2 (y_capped)
+        capital_alloc,     # 3
+        sigma_c,           # 4
+        expected_rc,       # 5
+        weights,           # 6
+        tickers,           # 7
+        portfolio_info,    # 8
+        sigma_p,           # 9
+        mu,                # 10
+        mu_p,              # 11
+        cov,               # 12
+        w_cash,            # 13
+        y_opt              # 14
     )
