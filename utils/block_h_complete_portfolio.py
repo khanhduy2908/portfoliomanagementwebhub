@@ -8,13 +8,15 @@ def optimize_allocation(
     """
     Tối ưu tỷ trọng phân bổ (cash, bond, stock) thỏa ràng buộc target ± margin.
     """
+
     weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
     weights_stock_i /= weights_stock_i.sum()
 
     def utility(x):
         w_cash, w_bond = x
         w_stock = 1 - w_cash - w_bond
-        if w_stock < 0 or w_cash < 0 or w_bond < 0 or w_cash > 1 or w_bond > 1:
+        # Ràng buộc trọng số hợp lệ
+        if (w_stock < 0) or (w_cash < 0) or (w_bond < 0) or (w_cash > 1) or (w_bond > 1):
             return 1e6  # penalty if out of bounds
 
         expected_return = w_stock * np.dot(weights_stock_i, mu) + (w_bond + w_cash) * rf
@@ -27,14 +29,14 @@ def optimize_allocation(
         (max(0, target_alloc['bond'] - margin), min(1, target_alloc['bond'] + margin))
     ]
 
-    # Constraint: total weights = 1
+    # Ràng buộc: w_cash + w_bond <= 1
     constraints = ({
-        'type': 'eq',
-        'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))
+        'type': 'ineq',
+        'fun': lambda x: 1 - (x[0] + x[1])  # >=0 nghĩa là tổng <=1
     })
 
     initial_guess = [target_alloc['cash'], target_alloc['bond']]
-    result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints)
+    result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints, method='SLSQP')
 
     if not result.success:
         raise ValueError(f"Optimization failed: {result.message}")
