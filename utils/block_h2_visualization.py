@@ -21,14 +21,12 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
-    # Prepare Pie Chart data
     pie_df = pd.DataFrame({
         'Asset Class / Ticker': labels,
         'Capital (VND)': sizes,
         'Allocation (%)': [v / total * 100 for v in sizes]
     })
 
-    # Two columns layout
     col1, col2 = st.columns([1.6, 1])
 
     with col1:
@@ -39,10 +37,14 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
             hole=0.35,
             title="Capital Allocation by Asset Class and Ticker"
         )
-        fig.update_traces(textinfo='percent+label', textfont_size=14)
+        fig.update_traces(
+            textinfo='percent+label',
+            textfont_size=14,
+            hovertemplate='%{label}: %{percent:.2f}<extra></extra>'
+        )
         fig.update_layout(
-            title_x=0.5,
-            title_y=0.95,
+            title_x=0.5,  # Căn giữa title ngang
+            title_y=0.95, # Nâng cao title
             plot_bgcolor='#1e1e1e',
             paper_bgcolor='#1e1e1e',
             font=dict(color='white', size=14),
@@ -52,7 +54,9 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
                 y=0.5,
                 x=1.05,
                 font=dict(size=12),
-                bgcolor='rgba(0,0,0,0)'
+                bgcolor='rgba(0,0,0,0)',
+                bordercolor='rgba(255,255,255,0.2)',
+                borderwidth=1
             )
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -108,7 +112,6 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
     ])
     st.dataframe(df_compare, use_container_width=True, height=250)
 
-    # Alert if deviation > 5%
     large_deviation = [
         k for k in ["Cash", "Bonds", "Stocks"]
         if abs(actual_ratios[k] - target_ratios[k]) > 0.05
