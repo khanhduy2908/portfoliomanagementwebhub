@@ -3,61 +3,67 @@ from scipy.optimize import minimize
 
 def optimize_allocation(
     best_portfolio, mu, cov, rf, A, total_capital,
-    target_alloc, margin=0.03
+    target_alloc, margin=0.03, epsilon=1e-6
 ):
     """
-    Optimize allocation (cash, bond, stock) with strict target ± margin constraints.
+    Tối ưu tỷ trọng phân bổ (cash, bond, stock) với ràng buộc target ± margin,
+    xử lý ma trận covariance gần suy biến, tránh lỗi singular matrix.
     """
-
-    # Validate inputs
-    cash_target = target_alloc.get('cash', 0)
-    bond_target = target_alloc.get('bond', 0)
-    stock_target = target_alloc.get('stock', 0)
-    margin = max(margin, 0.01)  # ensure margin not too small
-
-    if any(x < 0 or x > 1 for x in [cash_target, bond_target, stock_target]):
-        raise ValueError("Target allocations must be between 0 and 1.")
-    if abs(cash_target + bond_target + stock_target - 1) > 1e-6:
-        raise ValueError("Target allocations must sum to 1.")
 
     weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
     weights_stock_i /= weights_stock_i.sum()
+
+    # Regularize covariance matrix nếu gần suy biến
+    cond_number = np.linalg.cond(cov)
+    if cond_number > 1e10:
+        cov = cov + np.eye(cov.shape[0]) * epsilon
 
     def utility(x):
         w_cash, w_bond = x
         w_stock = 1 - w_cash - w_bond
 
-        # Penalize out of bounds
-        if w_stock < 0 or w_cash < 0 or w_bond < 0 or w_cash > 1 or w_bond > 1 or w_stock > 1:
-            return 1e6
+        # Ràng buộc trong hàm mục tiêu dưới dạng penalty:
+        penalty = 0
+        if w_stock < 0 or w_cash < 0 or w_bond < 0 or w_cash > 1 or w_bond > 1:
+            penalty += 1e6
+
+        # Penalty nếu lệch khỏi margin
+        penalty += 1e5 * max(0, abs(w_cash - target_alloc['cash']) - margin) ** 2
+        penalty += 1e5 * max(0, abs(w_bond - target_alloc['bond']) - margin) ** 2
+        penalty += 1e5 * max(0, abs(w_stock - target_alloc['stock']) - margin) ** 2
 
         expected_return = w_stock * np.dot(weights_stock_i, mu) + (w_bond + w_cash) * rf
         volatility = np.sqrt(weights_stock_i.T @ cov @ weights_stock_i) * w_stock
         u = expected_return - 0.5 * A * volatility ** 2
-        return -u  # minimize negative utility
+        return -u + penalty
 
-    # Bounds with margin, clipped inside [0,1]
-    bounds = [
-        (max(0, cash_target - margin), min(1, cash_target + margin)),
-        (max(0, bond_target - margin), min(1, bond_target + margin))
-    ]
-
-    # Constraint: sum weights = 1
+    # Ràng buộc bất đẳng thức: tổng cash + bond ≤ 1 (stock = 1 - cash - bond ≥ 0)
     constraints = ({
-        'type': 'eq',
-        'fun': lambda x: x[0] + x[1] + (1 - x[0] - x[1]) - 1
+        'type': 'ineq',
+        'fun': lambda x: 1 - (x[0] + x[1])
     })
 
-    initial_guess = [cash_target, bond_target]
+    # Bounds cho cash và bond theo margin, đảm bảo nằm trong [0,1]
+    bounds = [
+        (max(0, target_alloc['cash'] - margin), min(1, target_alloc['cash'] + margin)),
+        (max(0, target_alloc['bond'] - margin), min(1, target_alloc['bond'] + margin))
+    ]
+
+    # Khởi tạo gần target
+    initial_guess = [target_alloc['cash'], target_alloc['bond']]
 
     result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints, method='SLSQP')
 
     if not result.success:
-        raise ValueError(f"Optimization failed: {result.message}")
+        # fallback: trả về tỷ lệ target không thay đổi nếu tối ưu không thành công
+        w_cash_opt = target_alloc['cash']
+        w_bond_opt = target_alloc['bond']
+        w_stock_opt = 1 - w_cash_opt - w_bond_opt
+    else:
+        w_cash_opt, w_bond_opt = result.x
+        w_stock_opt = 1 - w_cash_opt - w_bond_opt
 
-    w_cash_opt, w_bond_opt = result.x
-    w_stock_opt = 1 - w_cash_opt - w_bond_opt
-
+    # Tính vốn phân bổ theo tối ưu
     capital_cash = w_cash_opt * total_capital
     capital_bond = w_bond_opt * total_capital
     capital_stock = w_stock_opt * total_capital
@@ -71,7 +77,9 @@ def optimize_allocation(
         'capital_alloc': capital_alloc,
         'w_cash': w_cash_opt,
         'w_bond': w_bond_opt,
-        'w_stock': w_stock_opt
+        'w_stock': w_stock_opt,
+        'optimization_success': result.success,
+        'optimization_message': result.message
     }
 
 
@@ -82,10 +90,6 @@ def run(
     y_min=0.6, y_max=0.9, time_horizon=None,
     margin=0.03
 ):
-    """
-    Block H: Complete Portfolio Construction with strict allocation optimization
-    """
-
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
 
@@ -96,13 +100,6 @@ def run(
 
     mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
     cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
-
-    # Normalize target allocation to sum 1
-    total_target = alloc_cash + alloc_bond + alloc_stock
-    if abs(total_target - 1) > 1e-6:
-        alloc_cash /= total_target
-        alloc_bond /= total_target
-        alloc_stock /= total_target
 
     target_alloc = {
         'cash': alloc_cash,
@@ -134,7 +131,7 @@ def run(
         raise ValueError("❌ Risky portfolio has invalid return or volatility.")
 
     expected_rc = (
-        capital_stock * (mu_p) +
+        capital_stock * mu_p +
         capital_bond * rf +
         capital_cash * rf
     ) / total_capital
@@ -168,7 +165,9 @@ def run(
         'target_bond_ratio': alloc_bond,
         'target_stock_ratio': alloc_stock,
         'time_horizon': time_horizon,
-        'margin': margin
+        'margin': margin,
+        'optimization_success': optimized['optimization_success'],
+        'optimization_message': optimized['optimization_message']
     }
 
     return (
@@ -182,4 +181,6 @@ def run(
         portfolio_info,
         sigma_p,
         mu,
+        mu_p,
+        cov
     )
