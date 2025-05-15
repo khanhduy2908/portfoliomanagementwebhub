@@ -3,7 +3,7 @@ import plotly.express as px
 import streamlit as st
 
 def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_matrix: dict, risk_level: str, time_horizon: str):
-    st.subheader("Asset Allocation Overview")
+    st.subheader("Asset Allocation Overview (Plotly Enhanced)")
 
     if not capital_alloc or not tickers:
         st.warning("⚠️ Missing capital allocation or tickers.")
@@ -21,7 +21,7 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
-    # Pie Chart Data
+    # Chuẩn bị dữ liệu cho Pie Chart
     pie_df = pd.DataFrame({
         'Asset Class / Ticker': labels,
         'Capital (VND)': sizes,
@@ -29,26 +29,23 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
     })
 
     # Layout 2 columns side-by-side (chart vs table)
-    col1, col2 = st.columns([1.4, 1.0])
+    col1, col2 = st.columns([1.6, 1])
 
     with col1:
         fig = px.pie(
             pie_df,
             names='Asset Class / Ticker',
             values='Allocation (%)',
-            hole=0.35
+            hole=0.35,
+            title="Capital Allocation by Asset Class and Ticker"
         )
-        fig.update_traces(textinfo='percent+label', textfont_size=13)
+        fig.update_traces(textinfo='percent+label', textfont_size=14)
         fig.update_layout(
-            title=dict(
-                text="Capital Allocation by Asset Class and Ticker",
-                x=0.5,
-                xanchor='center'
-            ),
+            title_x=0.5,
             plot_bgcolor='#1e1e1e',
             paper_bgcolor='#1e1e1e',
-            font_color='white',
-            margin=dict(t=40, b=20, l=10, r=10),
+            font=dict(color='white', size=14),
+            margin=dict(t=60, b=20, l=20, r=20),
             legend=dict(
                 orientation="v",
                 y=0.5,
@@ -59,11 +56,21 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         )
         st.plotly_chart(fig, use_container_width=True)
 
+        st.markdown(
+            """
+            <div style="color: white; font-size: 13px; margin-top: 15px;">
+                <b>Note:</b> Capital allocation includes cash, bonds, and individual stocks.<br>
+                Allocation percentages reflect the portion of total capital assigned to each asset.<br>
+                The pie chart visualizes diversification and portfolio balance.
+            </div>
+            """, unsafe_allow_html=True
+        )
+
     with col2:
         summary_df = pd.DataFrame({
             "Asset Class / Ticker": labels + ['Stock Total', 'Total'],
             "Capital (VND)": [f"{v:,.0f}" for v in sizes] + [f"{capital_stock:,.0f}", f"{total:,.0f}"],
-            "Allocation (%)": [f"{v/total*100:.1f}%" for v in sizes] + [f"{capital_stock/total*100:.1f}%", "100.0%"]
+            "Allocation (%)": [f"{v / total * 100:.1f}%" for v in sizes] + [f"{capital_stock / total * 100:.1f}%", "100.0%"]
         })
         st.markdown("#### Allocation Table")
         st.dataframe(summary_df, use_container_width=True, height=410)
@@ -92,9 +99,9 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
     df_compare = pd.DataFrame([
         {
             "Asset Class": k,
-            "Target Ratio": f"{target_ratios[k]*100:.1f}%",
-            "Actual Ratio": f"{actual_ratios[k]*100:.1f}%",
-            "Difference": f"{(actual_ratios[k] - target_ratios[k])*100:.1f}%"
+            "Target Ratio": f"{target_ratios[k] * 100:.1f}%",
+            "Actual Ratio": f"{actual_ratios[k] * 100:.1f}%",
+            "Difference": f"{(actual_ratios[k] - target_ratios[k]) * 100:.1f}%"
         }
         for k in ["Cash", "Bonds", "Stocks"]
     ])
