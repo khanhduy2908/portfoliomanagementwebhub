@@ -23,44 +23,47 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
-    # --- Plotly Pie Chart ---
+    # Pie Chart Data
     pie_df = pd.DataFrame({
         'Asset Class / Ticker': labels,
         'Capital (VND)': sizes,
         'Allocation (%)': [v / total * 100 for v in sizes]
     })
 
-    fig = px.pie(
-        pie_df,
-        names='Asset Class / Ticker',
-        values='Allocation (%)',
-        title="Capital Allocation by Asset Class and Ticker",
-        hole=0.35
-    )
-    fig.update_traces(textinfo='percent+label', textfont_size=14)
-    fig.update_layout(
-        plot_bgcolor='#1e1e1e',
-        paper_bgcolor='#1e1e1e',
-        font_color='white',
-        title_x=0.5,
-        legend=dict(bgcolor='#1e1e1e')
-    )
+    # Big Chart + Compact Table
+    col1, col2 = st.columns([3, 1])  # Widen chart column
 
-    col1, col2 = st.columns([2, 1])
     with col1:
+        fig = px.pie(
+            pie_df,
+            names='Asset Class / Ticker',
+            values='Allocation (%)',
+            hole=0.35,
+            title="Capital Allocation by Asset Class and Ticker"
+        )
+        fig.update_traces(textinfo='percent+label', textfont_size=13)
+        fig.update_layout(
+            plot_bgcolor='#1e1e1e',
+            paper_bgcolor='#1e1e1e',
+            font_color='white',
+            title_x=0.5,
+            margin=dict(t=40, b=30),
+            legend=dict(orientation="h", y=-0.2)
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
         summary_df = pd.DataFrame({
-            "Asset Class / Ticker": labels + ['Stock Total', 'Total'],
+            "Ticker": labels + ['Stock Total', 'Total'],
             "Capital (VND)": [f"{v:,.0f}" for v in sizes] + [f"{capital_stock:,.0f}", f"{total:,.0f}"],
-            "Allocation (%)": [f"{v/total*100:.1f}%" for v in sizes] + [f"{capital_stock/total*100:.1f}%", "100.0%"]
+            "Alloc (%)": [f"{v/total*100:.1f}%" for v in sizes] + [f"{capital_stock/total*100:.1f}%", "100.0%"]
         })
-        st.markdown("### Allocation Table")
+        st.markdown("#### Allocation Table")
         st.dataframe(summary_df, use_container_width=True, height=400)
 
-    # --- Target vs Actual Allocation ---
-    st.markdown("### Target vs Actual Allocation Comparison")
+    # --- Target vs Actual Allocation Comparison ---
+    st.markdown("#### Target vs Actual Allocation Comparison")
+
     target_allocation = allocation_matrix.get((risk_level, time_horizon), {
         "cash": portfolio_info.get('target_cash_ratio', 0),
         "bond": portfolio_info.get('target_bond_ratio', 0),
@@ -90,7 +93,7 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
     ])
     st.dataframe(df_compare, use_container_width=True, height=250)
 
-    # Cảnh báo lệch trên 5%
+    # Alert if deviation > 5%
     large_deviation = [
         k for k in ["Cash", "Bonds", "Stocks"]
         if abs(actual_ratios[k] - target_ratios[k]) > 0.05
