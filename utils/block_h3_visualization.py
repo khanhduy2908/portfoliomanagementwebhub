@@ -10,7 +10,6 @@ def run(
 ):
     st.subheader("Efficient Frontier with Optimal Complete Portfolio")
 
-    # --- Validate inputs and extract portfolio info ---
     try:
         best_key = list(best_portfolio.keys())[0]
         tickers = list(best_key)
@@ -20,7 +19,6 @@ def run(
         st.error(f"❌ Failed to extract best portfolio info: {e}")
         return
 
-    # --- Retrieve realistic expected returns and covariance matrix ---
     if adj_returns_combinations and cov_matrix_dict:
         try:
             mu_dict = adj_returns_combinations.get(best_key)
@@ -37,7 +35,6 @@ def run(
         mu_realistic = np.full(len(tickers), result.get('Expected Return (%)', 0) / 100)
         cov = np.outer(weights, weights) * (result.get('Volatility (%)', 0) / 100) ** 2
 
-    # --- Simulate Efficient Frontier for smooth visualization ---
     if simulate_for_visual:
         np.random.seed(42)
         n_simulations = 20000
@@ -58,7 +55,6 @@ def run(
     else:
         df_sim = pd.DataFrame(columns=['Volatility (%)', 'Expected Return (%)', 'Sharpe Ratio'])
 
-    # --- Build scatter plot ---
     fig = px.scatter(
         df_sim,
         x='Volatility (%)',
@@ -70,58 +66,56 @@ def run(
         title="Efficient Frontier with Optimal Complete Portfolio"
     )
 
-    # Add points with labels positioned to avoid overlap
-    annotations_pos = {
-        "Risk-Free": dict(x=0.5, y=rf*100 + 0.1, xref="x", yref="y", showarrow=False, font=dict(color="deepskyblue")),
-        "Optimal Risky": dict(x=sigma_p*100 + 5, y=mu_p*100 + 0.1, xref="x", yref="y", showarrow=False, font=dict(color="red")),
-        "Complete Portfolio": dict(x=sigma_c*100 + 5, y=expected_rc*100 + 0.1, xref="x", yref="y", showarrow=False, font=dict(color="lime")),
-        "Leveraged": dict(x=(y_opt*sigma_p)*100 + 5, y=(y_opt*mu_p + (1-y_opt)*rf)*100 + 0.1, xref="x", yref="y", showarrow=False, font=dict(color="magenta"))
-    }
-
+    # Risk-Free Rate
     fig.add_trace(go.Scatter(
         x=[0],
         y=[rf * 100],
-        mode='markers',
-        marker=dict(color='deepskyblue', size=14),
+        mode='markers+text',
         name=f"Risk-Free Rate ({rf*100:.2f}%)",
+        marker=dict(color='deepskyblue', size=14),
+        text=["Risk-Free"],
+        textposition="bottom left",
         hovertemplate="Risk-Free Rate: %{y:.2f}%<extra></extra>"
     ))
 
+    # Optimal Risky Portfolio
     fig.add_trace(go.Scatter(
         x=[sigma_p * 100],
         y=[mu_p * 100],
-        mode='markers',
-        marker=dict(color='red', size=16, symbol='star'),
+        mode='markers+text',
         name=f"Optimal Risky Portfolio ({', '.join(tickers)})",
+        marker=dict(color='red', size=16, symbol='star'),
+        text=["Optimal Risky"],
+        textposition="top left",
         hovertemplate="Optimal Risky Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
     ))
 
+    # Optimal Complete Portfolio
     fig.add_trace(go.Scatter(
         x=[sigma_c * 100],
         y=[expected_rc * 100],
-        mode='markers',
-        marker=dict(color='lime', size=16, symbol='diamond'),
+        mode='markers+text',
         name=f"Optimal Complete Portfolio (y={y_capped:.2f})",
+        marker=dict(color='lime', size=16, symbol='diamond'),
+        text=["Complete Portfolio"],
+        textposition="bottom right",
         hovertemplate="Complete Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
     ))
 
+    # Leveraged Portfolio if applicable
     if abs(y_opt - y_capped) > 0.01:
         sigma_leverage = y_opt * sigma_p
         rc_leverage = y_opt * mu_p + (1 - y_opt) * rf
         fig.add_trace(go.Scatter(
             x=[sigma_leverage * 100],
             y=[rc_leverage * 100],
-            mode='markers',
-            marker=dict(color='magenta', size=16, symbol='x'),
+            mode='markers+text',
             name=f"Leveraged Portfolio (y={y_opt:.2f})",
+            marker=dict(color='magenta', size=16, symbol='x'),
+            text=["Leveraged"],
+            textposition="bottom left",
             hovertemplate="Leveraged Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
         ))
-
-    # Add annotation labels on top-left corners of points
-    for label, ann in annotations_pos.items():
-        if label == "Leveraged" and abs(y_opt - y_capped) <= 0.01:
-            continue
-        fig.add_annotation(text=label, **ann)
 
     # Capital Allocation Line (CAL)
     slope = (mu_p - rf) / sigma_p if sigma_p > 0 else 0
@@ -138,16 +132,25 @@ def run(
         hoverinfo='skip'
     ))
 
-    # Layout with dark theme and grid hidden
+    # Final layout improvements
     fig.update_layout(
         height=650,
         plot_bgcolor='#1e1e1e',
         paper_bgcolor='#1e1e1e',
         font=dict(color='white'),
         title_x=0.5,
-        legend=dict(bgcolor='#1e1e1e', font=dict(color='white')),
-        margin=dict(t=70, b=50, l=70, r=40)
+        title_y=0.95,
+        legend=dict(
+            bgcolor='#1e1e1e',
+            font=dict(color='white'),
+            yanchor='top',
+            y=0.98,
+            xanchor='left',
+            x=0.02
+        ),
+        margin=dict(t=70, b=40, l=60, r=40)
     )
+
     fig.update_xaxes(title='Volatility (%)', color='white', showgrid=False)
     fig.update_yaxes(title='Expected Return (%)', color='white', showgrid=False)
 
