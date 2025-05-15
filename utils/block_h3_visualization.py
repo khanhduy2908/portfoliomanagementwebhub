@@ -132,7 +132,7 @@ def run(
         plot_bgcolor='#1e1e1e',
         paper_bgcolor='#1e1e1e',
         font=dict(color='white'),
-        title_x=0.1,
+        title_x=0.25,
         title_y=0.98,
         title_font=dict(size=20, family='Arial, sans-serif', color='white'),
         legend=dict(
