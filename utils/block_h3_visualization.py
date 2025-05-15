@@ -19,7 +19,7 @@ def run(
         st.error(f"❌ Failed to extract best portfolio: {e}")
         return
 
-    # --- Step 1: Get realistic mu and covariance ---
+    # Step 1: Retrieve mu and cov with fallback
     if adj_returns_combinations and cov_matrix_dict:
         try:
             mu_dict = adj_returns_combinations.get(best_key)
@@ -36,7 +36,7 @@ def run(
         mu_realistic = np.full(len(tickers), result.get('Expected Return (%)', 0) / 100)
         cov = np.outer(weights, weights) * (result.get('Volatility (%)', 0) / 100) ** 2
 
-    # --- Step 2: Simulate Efficient Frontier ---
+    # Step 2: Simulate Efficient Frontier portfolios for smooth curve
     if simulate_for_visual:
         np.random.seed(42)
         n_simulations = 20000
@@ -45,8 +45,8 @@ def run(
         sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
         sharpe_sim = (mu_sim - rf) / sigma_sim
 
-        mask = (sigma_sim > 1e-5) & (mu_sim > 1e-5) & np.isfinite(sharpe_sim)
-        mu_sim, sigma_sim, sharpe_sim = mu_sim[mask], sigma_sim[mask], sharpe_sim[mask]
+        valid_mask = (sigma_sim > 1e-5) & (mu_sim > 1e-5) & np.isfinite(sharpe_sim)
+        mu_sim, sigma_sim, sharpe_sim = mu_sim[valid_mask], sigma_sim[valid_mask], sharpe_sim[valid_mask]
 
         df_sim = pd.DataFrame({
             'Volatility (%)': sigma_sim * 100,
@@ -56,51 +56,51 @@ def run(
     else:
         df_sim = pd.DataFrame(columns=['Volatility (%)', 'Expected Return (%)', 'Sharpe Ratio'])
 
-    # --- Step 3: Build Plotly chart ---
+    # Step 3: Plotly scatter plot with color gradient by Sharpe Ratio
     fig = px.scatter(
         df_sim,
         x='Volatility (%)',
         y='Expected Return (%)',
         color='Sharpe Ratio',
         color_continuous_scale='plasma',
-        opacity=0.9,
+        opacity=0.85,
         title="Efficient Frontier with Optimal Complete Portfolio"
     )
 
-    # Risk-Free Rate
+    # Add Risk-Free Rate point
     fig.add_trace(go.Scatter(
         x=[0],
         y=[rf * 100],
         mode='markers+text',
         name=f"Risk-Free Rate ({rf*100:.2f}%)",
-        marker=dict(color='deepskyblue', size=10),
+        marker=dict(color='deepskyblue', size=14),
         text=["Risk-Free"],
         textposition="bottom right"
     ))
 
-    # Optimal Risky Portfolio
+    # Add Optimal Risky Portfolio point
     fig.add_trace(go.Scatter(
         x=[sigma_p * 100],
         y=[mu_p * 100],
         mode='markers+text',
         name=f"Optimal Risky Portfolio ({', '.join(tickers)})",
-        marker=dict(color='red', size=13, symbol='star'),
+        marker=dict(color='red', size=16, symbol='star'),
         text=["Optimal Risky"],
         textposition="top center"
     ))
 
-    # Optimal Complete Portfolio
+    # Add Optimal Complete Portfolio point
     fig.add_trace(go.Scatter(
         x=[sigma_c * 100],
         y=[expected_rc * 100],
         mode='markers+text',
         name=f"Optimal Complete Portfolio (y={y_capped:.2f})",
-        marker=dict(color='lime', size=13, symbol='diamond'),
+        marker=dict(color='lime', size=16, symbol='diamond'),
         text=["Complete Portfolio"],
         textposition="top center"
     ))
 
-    # Leveraged Portfolio (if applicable)
+    # Add Leveraged Portfolio if different from capped
     if abs(y_opt - y_capped) > 0.01:
         sigma_leverage = y_opt * sigma_p
         rc_leverage = y_opt * mu_p + (1 - y_opt) * rf
@@ -109,12 +109,12 @@ def run(
             y=[rc_leverage * 100],
             mode='markers+text',
             name=f"Leveraged Portfolio (y={y_opt:.2f})",
-            marker=dict(color='magenta', size=13, symbol='x'),
+            marker=dict(color='magenta', size=16, symbol='x'),
             text=["Leveraged"],
             textposition="top center"
         ))
 
-    # Capital Allocation Line (CAL)
+    # Add Capital Allocation Line (CAL)
     slope = (mu_p - rf) / sigma_p if sigma_p > 0 else 0
     max_sigma = df_sim['Volatility (%)'].max() if not df_sim.empty else sigma_p * 150
     x_line = np.linspace(0, max_sigma * 1.1, 300)
@@ -128,7 +128,7 @@ def run(
         line=dict(color='red', dash='dash', width=2)
     ))
 
-    # Final layout
+    # Final layout adjustments for dark theme
     fig.update_layout(
         height=650,
         plot_bgcolor='#1e1e1e',
