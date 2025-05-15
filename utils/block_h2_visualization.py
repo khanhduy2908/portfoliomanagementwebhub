@@ -43,7 +43,7 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
             hovertemplate='%{label}: %{percent:.2f}<extra></extra>'
         )
         fig.update_layout(
-            title_x=0.1,  # Căn giữa title ngang
+            title_x=0.25,  # Căn giữa title ngang
             title_y=0.95,
             plot_bgcolor='#1e1e1e',
             paper_bgcolor='#1e1e1e',
