@@ -3,7 +3,7 @@ import plotly.express as px
 import streamlit as st
 
 def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_matrix: dict, risk_level: str, time_horizon: str):
-    st.subheader("Asset Allocation Overview (Plotly Enhanced)")
+    st.subheader("Asset Allocation Overview")
 
     if not capital_alloc or not tickers:
         st.warning("⚠️ Missing capital allocation or tickers.")
