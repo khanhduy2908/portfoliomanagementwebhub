@@ -132,7 +132,6 @@ def run(
         hoverinfo='skip'
     ))
 
-    # Final layout improvements
     fig.update_layout(
         height=650,
         plot_bgcolor='#1e1e1e',
