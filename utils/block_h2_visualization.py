@@ -1,8 +1,6 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from matplotlib.colors import Normalize
-import matplotlib.cm as cm
 
 def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_matrix: dict, risk_level: str, time_horizon: str):
     st.subheader("Asset Allocation Overview (Plotly Enhanced)")
@@ -29,8 +27,8 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         'Allocation (%)': [v / total * 100 for v in sizes]
     })
 
-    # Biểu đồ + Bảng chia theo tỷ lệ 1.3:1 để không bị chiếm hết không gian
-    col1, col2 = st.columns([1.3, 1])
+    # --- Chart & Table side-by-side ---
+    col1, col2 = st.columns([2, 2])  # Even split for better alignment
 
     with col1:
         fig = px.pie(
@@ -47,9 +45,15 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
             paper_bgcolor='#1e1e1e',
             font_color='white',
             title_x=0.5,
-            height=420,
-            margin=dict(t=40, b=30),
-            legend=dict(orientation="h", y=-0.15)
+            margin=dict(t=40, b=20, l=10, r=10),
+            legend=dict(
+                title='',
+                orientation="v",
+                y=0.5,
+                x=1.05,
+                font=dict(size=12),
+                bgcolor='rgba(0,0,0,0)'
+            )
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -57,12 +61,12 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         summary_df = pd.DataFrame({
             "Asset Class / Ticker": labels + ['Stock Total', 'Total'],
             "Capital (VND)": [f"{v:,.0f}" for v in sizes] + [f"{capital_stock:,.0f}", f"{total:,.0f}"],
-            "Allocation (%)": [f"{v/total*100:.1f}%" for v in sizes] + [f"{capital_stock/total*100:.1f}%", "100.0%"]
+            "Allocation (%)": [f"{v / total * 100:.1f}%" for v in sizes] + [f"{capital_stock / total * 100:.1f}%", "100.0%"]
         })
         st.markdown("#### Allocation Table")
         st.dataframe(summary_df, use_container_width=True, height=400)
 
-    # --- Target vs Actual Allocation Comparison ---
+    # --- Target vs Actual ---
     st.markdown("#### Target vs Actual Allocation Comparison")
 
     target_allocation = allocation_matrix.get((risk_level, time_horizon), {
@@ -94,7 +98,6 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
     ])
     st.dataframe(df_compare, use_container_width=True, height=250)
 
-    # Alert if deviation > 5%
     large_deviation = [
         k for k in ["Cash", "Bonds", "Stocks"]
         if abs(actual_ratios[k] - target_ratios[k]) > 0.05
