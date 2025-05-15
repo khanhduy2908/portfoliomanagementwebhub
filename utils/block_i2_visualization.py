@@ -4,8 +4,6 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
-from matplotlib.colors import Normalize
-import matplotlib.cm as cm
 
 def run(data_stocks, benchmark_data, benchmark_symbol, portfolio_weights, tickers,
         start_date, end_date):
@@ -17,8 +15,8 @@ def run(data_stocks, benchmark_data, benchmark_symbol, portfolio_weights, ticker
     benchmark_data['time'] = pd.to_datetime(benchmark_data['time'])
 
     # Lọc dữ liệu theo thời gian
-    mask_stocks = (data_stocks['time'] >= pd.to_datetime(start_date)) & (data_stocks['time'] <= pd.to_datetime(end_date))
-    mask_bench = (benchmark_data['time'] >= pd.to_datetime(start_date)) & (benchmark_data['time'] <= pd.to_datetime(end_date))
+    mask_stocks = (data_stocks['time'] >= start_date) & (data_stocks['time'] <= end_date)
+    mask_bench = (benchmark_data['time'] >= start_date) & (benchmark_data['time'] <= end_date)
 
     df_stocks = data_stocks.loc[mask_stocks]
     df_bench = benchmark_data.loc[mask_bench]
@@ -36,19 +34,12 @@ def run(data_stocks, benchmark_data, benchmark_symbol, portfolio_weights, ticker
     returns_stocks = returns_stocks.loc[common_dates]
     returns_bench = returns_bench.loc[common_dates]
 
-    # Đồng bộ ticker giữa returns và weights
-    common_tickers = list(set(returns_stocks.columns).intersection(tickers))
-
-    # Lọc lại returns và weights cho đồng bộ ticker
-    returns_stocks = returns_stocks[common_tickers]
-    weights = np.array([portfolio_weights[tickers.index(t)] for t in common_tickers])
-
-    # Tính lợi nhuận danh mục
-    port_returns = returns_stocks.dot(weights)
-
     # --- Rolling Beta (30 ngày) ---
     window = 30
+    rolling_beta = pd.Series(dtype=float, index=common_dates)
 
+    # Tính beta danh mục theo công thức beta = cov(Rp, Rb) / var(Rb)
+    port_returns = returns_stocks.dot(portfolio_weights)
     rolling_cov = port_returns.rolling(window).cov(returns_bench)
     rolling_var = returns_bench.rolling(window).var()
     rolling_beta = rolling_cov / rolling_var
@@ -65,10 +56,12 @@ def run(data_stocks, benchmark_data, benchmark_symbol, portfolio_weights, ticker
     rolling_sharpe = (rolling_mean - risk_free_rate) / rolling_vol
 
     # --- Asset Allocation Over Time ---
-    # Giả sử không có dữ liệu allocations_time, bỏ qua phần này
-    allocations_time = None
+    # Giả sử có data phân bổ từng tài sản theo thời gian (ví dụ DataFrame allocations_time với columns: 'time', 'Ticker', 'Allocation')
+    # Nếu không có, bỏ qua hoặc tạo ví dụ giả lập
+    allocations_time = None  # Bạn cần truyền dữ liệu này nếu có
 
     # --- Return Distribution Histogram ---
+    # Biểu đồ histogram lợi nhuận danh mục
     hist_data = port_returns
 
     # === Tạo Figure với nhiều subplot ===
@@ -106,17 +99,19 @@ def run(data_stocks, benchmark_data, benchmark_symbol, portfolio_weights, ticker
 
     # Row 3, Col 2: Asset Allocation Over Time (nếu có)
     if allocations_time is not None and not allocations_time.empty:
+        # Cần dữ liệu allocations_time: columns = ['time', 'Ticker', 'Allocation']
+        # Chuyển sang wide format cho stacked bar
         alloc_pivot = allocations_time.pivot(index='time', columns='Ticker', values='Allocation').fillna(0)
         for ticker in alloc_pivot.columns:
             fig.add_trace(go.Bar(
                 x=alloc_pivot.index,
                 y=alloc_pivot[ticker],
                 name=ticker,
+                marker=dict(),
                 showlegend=True
             ), row=3, col=2)
         fig.update_layout(barmode='stack')
     else:
-        # Nếu không có dữ liệu thì để trống
         fig.add_trace(go.Scatter(
             x=[None], y=[None], mode='markers',
             name="No allocation data", showlegend=False
