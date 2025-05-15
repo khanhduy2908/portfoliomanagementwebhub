@@ -15,11 +15,11 @@ def optimize_allocation(
         w_cash, w_bond = x
         w_stock = 1 - w_cash - w_bond
         if w_stock < 0 or w_cash < 0 or w_bond < 0 or w_cash > 1 or w_bond > 1:
-            return 1e6  # Phạt nếu vượt giới hạn
+            return 1e6  # penalty if out of bounds
 
-        exp_ret = w_stock * np.dot(weights_stock_i, mu) + (w_bond + w_cash) * rf
-        sigma = np.sqrt(weights_stock_i.T @ cov @ weights_stock_i) * w_stock
-        u = exp_ret - 0.5 * A * sigma ** 2
+        expected_return = w_stock * np.dot(weights_stock_i, mu) + (w_bond + w_cash) * rf
+        volatility = np.sqrt(weights_stock_i.T @ cov @ weights_stock_i) * w_stock
+        u = expected_return - 0.5 * A * volatility ** 2
         return -u  # minimize negative utility
 
     bounds = [
@@ -27,6 +27,7 @@ def optimize_allocation(
         (max(0, target_alloc['bond'] - margin), min(1, target_alloc['bond'] + margin))
     ]
 
+    # Constraint: total weights = 1
     constraints = ({
         'type': 'eq',
         'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))
@@ -36,7 +37,7 @@ def optimize_allocation(
     result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints)
 
     if not result.success:
-        raise ValueError("Optimization failed: " + result.message)
+        raise ValueError(f"Optimization failed: {result.message}")
 
     w_cash_opt, w_bond_opt = result.x
     w_stock_opt = 1 - w_cash_opt - w_bond_opt
@@ -66,7 +67,7 @@ def run(
     margin=0.03
 ):
     """
-    Block H: Complete Portfolio Construction with constrained allocation optimization
+    Block H: Complete Portfolio Construction with strict allocation optimization
     """
 
     if not hrp_result_dict:
@@ -80,7 +81,6 @@ def run(
     mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
     cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
 
-    # Tối ưu phân bổ chặt chẽ theo strategy target ± margin
     target_alloc = {
         'cash': alloc_cash,
         'bond': alloc_bond,
@@ -107,7 +107,9 @@ def run(
     mu_p = weights @ mu
     sigma_p = np.sqrt(weights.T @ cov @ weights)
 
-    # Tính chỉ số portfolio tổng thể sau khi tối ưu
+    if mu_p <= 0 or sigma_p <= 0:
+        raise ValueError("❌ Risky portfolio has invalid return or volatility.")
+
     expected_rc = (
         capital_stock * (mu_p) +
         capital_bond * rf +
