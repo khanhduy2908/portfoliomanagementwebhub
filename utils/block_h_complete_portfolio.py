@@ -3,10 +3,10 @@ from scipy.optimize import minimize
 
 def optimize_allocation(
     best_portfolio, mu, cov, rf, A, total_capital,
-    target_alloc, margin=0.03, penalty_weight=5000
+    target_alloc, margin=0.01, penalty_weight=20000
 ):
     """
-    Tối ưu tỷ trọng phân bổ (cash, bond, stock) với penalty mềm mượt cho sai lệch tỷ trọng.
+    Tối ưu tỷ trọng phân bổ (cash, bond, stock) với penalty mềm và constraints cứng gần target ± margin.
     """
     weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
     weights_stock_i /= weights_stock_i.sum()
@@ -19,7 +19,6 @@ def optimize_allocation(
         w_cash, w_bond = x
         w_stock = 1 - w_cash - w_bond
 
-        # Loại bỏ trường hợp vi phạm phạm vi hợp lệ
         if (w_stock < 0) or (w_cash < 0) or (w_bond < 0) or (w_cash > 1) or (w_bond > 1):
             return 1e8
 
@@ -32,10 +31,16 @@ def optimize_allocation(
 
         return -u + penalty
 
-    constraints = ({
-        'type': 'eq',
-        'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))
-    })
+    # Constraints cứng giữ tỷ trọng trong vùng target ± margin
+    constraints = [
+        {'type': 'eq', 'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))},
+        {'type': 'ineq', 'fun': lambda x: x[0] - (target_alloc['cash'] - margin)},          # w_cash >= target - margin
+        {'type': 'ineq', 'fun': lambda x: (target_alloc['cash'] + margin) - x[0]},          # w_cash <= target + margin
+        {'type': 'ineq', 'fun': lambda x: x[1] - (target_alloc['bond'] - margin)},          # w_bond >= target - margin
+        {'type': 'ineq', 'fun': lambda x: (target_alloc['bond'] + margin) - x[1]},          # w_bond <= target + margin
+        {'type': 'ineq', 'fun': lambda x: (1 - x[0] - x[1]) - (target_alloc['stock'] - margin)},  # w_stock >= target - margin
+        {'type': 'ineq', 'fun': lambda x: (target_alloc['stock'] + margin) - (1 - x[0] - x[1])}   # w_stock <= target + margin
+    ]
 
     bounds = [(0, 1), (0, 1)]
 
@@ -44,16 +49,20 @@ def optimize_allocation(
         np.clip(target_alloc['bond'], margin, 1 - 2 * margin)
     ]
 
-    # Ưu tiên dùng phương pháp trust-constr để tối ưu ổn định hơn
+    # Thử tối ưu với trust-constr
     result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints,
                       method='trust-constr', options={'xtol':1e-9, 'disp': False})
 
     if not result.success:
-        # Fallback sang SLSQP nếu trust-constr thất bại
+        # Fallback sang SLSQP
         result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints,
                           method='SLSQP', options={'ftol':1e-9, 'disp': False})
         if not result.success:
-            raise ValueError(f"Optimization failed: {result.message}")
+            # Fallback sang COBYLA (ít strict constraints hơn)
+            result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints,
+                              method='COBYLA', options={'tol':1e-9, 'disp': False})
+            if not result.success:
+                raise ValueError(f"Optimization failed: {result.message}")
 
     w_cash_opt, w_bond_opt = result.x
     w_stock_opt = 1 - w_cash_opt - w_bond_opt
@@ -97,7 +106,7 @@ def run(
     rf, A, total_capital, risk_score,
     alloc_cash, alloc_bond, alloc_stock,
     y_min=0.6, y_max=0.9, time_horizon=None,
-    margin=0.03, penalty_weight=5000
+    margin=0.01, penalty_weight=20000
 ):
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
