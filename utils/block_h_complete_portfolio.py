@@ -77,6 +77,7 @@ def optimize_allocation(
 
     return w_cash_opt, w_bond_opt, w_stock_opt, capital_cash, capital_bond, capital_stock, capital_alloc
 
+
 def run(
     hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     rf, A, total_capital, risk_score,
@@ -133,6 +134,9 @@ def run(
 
     utility = expected_rc - 0.5 * A * sigma_c ** 2
 
+    # Tính max_rf_ratio (giới hạn tối đa vốn không rủi ro)
+    max_rf_ratio = alloc_cash + alloc_bond
+
     portfolio_info = {
         'portfolio_name': '-'.join(best_key),
         'mu': mu_p,
@@ -159,9 +163,9 @@ def run(
         'target_stock_ratio': alloc_stock,
         'time_horizon': time_horizon,
         'margin': margin,
-        # Bổ sung 2 trường này để tránh lỗi 'y_opt'
-        'y_opt': w_stock,
-        'y_capped': w_stock
+        'y_opt': w_stock,     # Trả về y_opt để block h1 dùng
+        'y_capped': w_stock,  # Trả về y_capped (bằng y_opt ở đây)
+        'max_rf_ratio': max_rf_ratio
     }
 
     return (
