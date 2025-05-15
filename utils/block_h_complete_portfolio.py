@@ -160,6 +160,7 @@ def run(
         tickers,
         portfolio_info,
         sigma_p,
+        y_opt,
         mu,
         mu_p,
         cov
