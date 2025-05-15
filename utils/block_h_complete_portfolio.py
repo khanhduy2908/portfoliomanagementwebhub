@@ -8,15 +8,13 @@ def optimize_allocation(
     """
     Tối ưu tỷ trọng phân bổ (cash, bond, stock) thỏa ràng buộc target ± margin.
     """
-
     weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
     weights_stock_i /= weights_stock_i.sum()
 
     def utility(x):
         w_cash, w_bond = x
         w_stock = 1 - w_cash - w_bond
-        # Ràng buộc trọng số hợp lệ
-        if (w_stock < 0) or (w_cash < 0) or (w_bond < 0) or (w_cash > 1) or (w_bond > 1):
+        if w_stock < 0 or w_cash < 0 or w_bond < 0 or w_cash > 1 or w_bond > 1:
             return 1e6  # penalty if out of bounds
 
         expected_return = w_stock * np.dot(weights_stock_i, mu) + (w_bond + w_cash) * rf
@@ -29,14 +27,14 @@ def optimize_allocation(
         (max(0, target_alloc['bond'] - margin), min(1, target_alloc['bond'] + margin))
     ]
 
-    # Ràng buộc: w_cash + w_bond <= 1
+    # Constraint: total weights = 1
     constraints = ({
-        'type': 'ineq',
-        'fun': lambda x: 1 - (x[0] + x[1])  # >=0 nghĩa là tổng <=1
+        'type': 'eq',
+        'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))
     })
 
     initial_guess = [target_alloc['cash'], target_alloc['bond']]
-    result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints, method='SLSQP')
+    result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints)
 
     if not result.success:
         raise ValueError(f"Optimization failed: {result.message}")
@@ -150,18 +148,19 @@ def run(
         'margin': margin
     }
 
+    # Trả về 13 biến chuẩn, đủ dùng trong app
     return (
-        best_portfolio,
-        w_stock,
-        capital_alloc,
-        sigma_c,
-        expected_rc,
-        weights,
-        tickers,
-        portfolio_info,
-        sigma_p,
-        y_opt,
-        mu,
-        mu_p,
-        cov
+        best_portfolio,        # 1
+        w_stock,               # 2
+        capital_alloc,         # 3
+        sigma_c,               # 4
+        expected_rc,           # 5
+        weights,               # 6
+        tickers,               # 7
+        portfolio_info,        # 8
+        sigma_p,               # 9
+        mu,                    # 10
+        w_cash,                # 11
+        mu_p,                  # 12
+        cov                    # 13
     )
