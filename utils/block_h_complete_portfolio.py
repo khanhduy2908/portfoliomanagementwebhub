@@ -1,31 +1,73 @@
 import numpy as np
-from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize
 
-def get_max_rf_ratio(score, A, alloc_cash, alloc_bond, alloc_stock):
-    if 10 <= score <= 17:
-        hard_cap = 0.40
-    elif 18 <= score <= 27:
-        hard_cap = 0.20
-    elif 28 <= score <= 40:
-        hard_cap = 0.10
-    else:
-        raise ValueError("Invalid risk score.")
+def optimize_allocation(
+    best_portfolio, mu, cov, rf, A, total_capital,
+    target_alloc, margin=0.03
+):
+    """
+    Tối ưu tỷ trọng phân bổ (cash, bond, stock) thỏa ràng buộc target ± margin.
+    """
+    weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
+    weights_stock_i /= weights_stock_i.sum()
 
-    if A >= 25:
-        suggested = 0.40
-    elif A <= 2:
-        suggested = 0.02
-    else:
-        suggested = 0.02 + (A - 2) * ((0.40 - 0.02) / (25 - 2))
+    def utility(x):
+        w_cash, w_bond = x
+        w_stock = 1 - w_cash - w_bond
+        if w_stock < 0 or w_cash < 0 or w_bond < 0 or w_cash > 1 or w_bond > 1:
+            return 1e6  # Phạt nếu vượt giới hạn
 
-    max_target_rf = alloc_cash + alloc_bond + 0.4 * alloc_stock
-    return min(hard_cap, suggested, max_target_rf)
+        exp_ret = w_stock * np.dot(weights_stock_i, mu) + (w_bond + w_cash) * rf
+        sigma = np.sqrt(weights_stock_i.T @ cov @ weights_stock_i) * w_stock
+        u = exp_ret - 0.5 * A * sigma ** 2
+        return -u  # minimize negative utility
+
+    bounds = [
+        (max(0, target_alloc['cash'] - margin), min(1, target_alloc['cash'] + margin)),
+        (max(0, target_alloc['bond'] - margin), min(1, target_alloc['bond'] + margin))
+    ]
+
+    constraints = ({
+        'type': 'eq',
+        'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))
+    })
+
+    initial_guess = [target_alloc['cash'], target_alloc['bond']]
+    result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints)
+
+    if not result.success:
+        raise ValueError("Optimization failed: " + result.message)
+
+    w_cash_opt, w_bond_opt = result.x
+    w_stock_opt = 1 - w_cash_opt - w_bond_opt
+
+    capital_cash = w_cash_opt * total_capital
+    capital_bond = w_bond_opt * total_capital
+    capital_stock = w_stock_opt * total_capital
+
+    capital_alloc = {t: w_stock_opt * total_capital * w for t, w in best_portfolio['Weights'].items()}
+
+    return {
+        'capital_cash': capital_cash,
+        'capital_bond': capital_bond,
+        'capital_stock': capital_stock,
+        'capital_alloc': capital_alloc,
+        'w_cash': w_cash_opt,
+        'w_bond': w_bond_opt,
+        'w_stock': w_stock_opt
+    }
+
 
 def run(
     hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
     rf, A, total_capital, risk_score,
     alloc_cash, alloc_bond, alloc_stock,
-    y_min=0.6, y_max=0.9, time_horizon=None):
+    y_min=0.6, y_max=0.9, time_horizon=None,
+    margin=0.03
+):
+    """
+    Block H: Complete Portfolio Construction with constrained allocation optimization
+    """
 
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
@@ -34,101 +76,47 @@ def run(
     best_portfolio = hrp_result_dict[best_key]
 
     tickers = list(best_portfolio['Weights'].keys())
-    weights = np.array([best_portfolio['Weights'][t] for t in tickers])
-    weights /= weights.sum()
 
     mu = np.array([adj_returns_combinations[best_key][t] for t in tickers]) / 100
     cov = cov_matrix_dict[best_key].loc[tickers, tickers].values
 
+    # Tối ưu phân bổ chặt chẽ theo strategy target ± margin
+    target_alloc = {
+        'cash': alloc_cash,
+        'bond': alloc_bond,
+        'stock': alloc_stock
+    }
+
+    optimized = optimize_allocation(
+        best_portfolio, mu, cov, rf, A, total_capital,
+        target_alloc, margin=margin
+    )
+
+    capital_cash = optimized['capital_cash']
+    capital_bond = optimized['capital_bond']
+    capital_stock = optimized['capital_stock']
+    capital_alloc = optimized['capital_alloc']
+
+    w_cash = optimized['w_cash']
+    w_bond = optimized['w_bond']
+    w_stock = optimized['w_stock']
+
+    weights = np.array([best_portfolio['Weights'][t] for t in tickers])
+    weights /= weights.sum()
+
     mu_p = weights @ mu
     sigma_p = np.sqrt(weights.T @ cov @ weights)
 
-    if mu_p <= 0 or sigma_p <= 0:
-        raise ValueError("❌ Risky portfolio has invalid return or volatility.")
-
-    capital_cash = alloc_cash * total_capital
-    capital_bond = alloc_bond * total_capital
-    capital_stock = alloc_stock * total_capital
-
-    max_rf_ratio = get_max_rf_ratio(risk_score, A, alloc_cash, alloc_bond, alloc_stock)
-
-    upper_bound = min(y_max, 1 - max_rf_ratio)
-    if upper_bound <= y_min:
-        y_min = max(0.01, upper_bound - 0.01)
-
-    def neg_utility(y):
-        expected_return = y * mu_p + (1 - y) * rf
-        volatility = y * sigma_p
-
-        # Tính lại tỷ lệ phân bổ thực tế theo y
-        capital_risky_tmp = capital_stock * y
-        capital_rf_internal_tmp = capital_stock * (1 - y)
-
-        actual_cash_tmp = (capital_cash + capital_rf_internal_tmp * alloc_cash / (alloc_cash + alloc_bond)) / total_capital
-        actual_bond_tmp = (capital_bond + capital_rf_internal_tmp * alloc_bond / (alloc_cash + alloc_bond)) / total_capital
-        actual_stock_tmp = capital_risky_tmp / total_capital
-
-        # Penalty mạnh với tổng bình phương sai lệch tỷ lệ thực tế so với target
-        penalty = 500 * (
-            (actual_cash_tmp - alloc_cash) ** 2 +
-            (actual_bond_tmp - alloc_bond) ** 2 +
-            (actual_stock_tmp - alloc_stock) ** 2
-        )
-
-        # Trả về giá trị âm utility cộng penalty
-        return -(expected_return - 0.5 * A * volatility ** 2) + penalty
-
-    # Tối ưu hóa y trong phạm vi ràng buộc
-    result = minimize_scalar(neg_utility, bounds=(y_min, upper_bound), method='bounded')
-    y_opt = result.x
-    y_capped = np.clip(y_opt, y_min, upper_bound)
-
-    capital_risky = capital_stock * y_capped
-    capital_rf_internal = capital_stock * (1 - y_capped)
-    capital_rf_total = capital_cash + capital_bond + capital_rf_internal
-
-    rf_cap_limit = max_rf_ratio * total_capital
-    if capital_rf_total > rf_cap_limit:
-        excess = capital_rf_total - rf_cap_limit
-        capital_risky += excess
-        capital_rf_total = rf_cap_limit
-        y_capped = capital_risky / capital_stock if capital_stock > 0 else 0
-
-    # Tính lại tỷ lệ thực tế sau clipping
-    actual_cash_ratio = (capital_cash + capital_rf_internal * alloc_cash / (alloc_cash + alloc_bond)) / total_capital
-    actual_bond_ratio = (capital_bond + capital_rf_internal * alloc_bond / (alloc_cash + alloc_bond)) / total_capital
-    actual_stock_ratio = capital_risky / total_capital
-
-    # Cắt tỷ lệ thực tế để không lệch quá 5% so với target
-    def clip_ratio(r, target): 
-        return min(max(r, target - 0.05), target + 0.05)
-
-    actual_cash_ratio = clip_ratio(actual_cash_ratio, alloc_cash)
-    actual_bond_ratio = clip_ratio(actual_bond_ratio, alloc_bond)
-    actual_stock_ratio = clip_ratio(actual_stock_ratio, alloc_stock)
-
-    # Chuẩn hóa tổng tỷ lệ = 1
-    total_adjusted = actual_cash_ratio + actual_bond_ratio + actual_stock_ratio
-    actual_cash_ratio /= total_adjusted
-    actual_bond_ratio /= total_adjusted
-    actual_stock_ratio /= total_adjusted
-
-    capital_cash = total_capital * actual_cash_ratio
-    capital_bond = total_capital * actual_bond_ratio
-    capital_stock = total_capital * actual_stock_ratio
-    capital_risky = capital_stock * y_capped
-    capital_rf_total = capital_cash + capital_bond + capital_stock * (1 - y_capped)
-
+    # Tính chỉ số portfolio tổng thể sau khi tối ưu
     expected_rc = (
-        capital_stock * (y_capped * mu_p + (1 - y_capped) * rf) +
+        capital_stock * (mu_p) +
         capital_bond * rf +
         capital_cash * rf
     ) / total_capital
 
-    sigma_c = (capital_stock * y_capped * sigma_p) / total_capital
-    utility = expected_rc - 0.5 * A * sigma_c ** 2
+    sigma_c = (capital_stock * sigma_p) / total_capital
 
-    capital_alloc = {t: capital_risky * w for t, w in zip(tickers, weights)}
+    utility = expected_rc - 0.5 * A * sigma_c ** 2
 
     portfolio_info = {
         'portfolio_name': '-'.join(best_key),
@@ -137,31 +125,38 @@ def run(
         'rf': rf,
         'A': A,
         'risk_score': risk_score,
-        'y_opt': y_opt,
-        'y_capped': y_capped,
         'expected_rc': expected_rc,
         'sigma_c': sigma_c,
         'utility': utility,
-        'capital_risky': capital_risky,
-        'capital_rf': capital_rf_total,
+        'capital_risky': capital_stock,
+        'capital_rf': capital_cash + capital_bond,
         'capital_cash': capital_cash,
         'capital_bond': capital_bond,
         'capital_stock': capital_stock,
         'alloc_cash': alloc_cash,
         'alloc_bond': alloc_bond,
         'alloc_stock': alloc_stock,
-        'actual_cash_ratio': actual_cash_ratio,
-        'actual_bond_ratio': actual_bond_ratio,
-        'actual_stock_ratio': actual_stock_ratio,
+        'actual_cash_ratio': w_cash,
+        'actual_bond_ratio': w_bond,
+        'actual_stock_ratio': w_stock,
         'target_cash_ratio': alloc_cash,
         'target_bond_ratio': alloc_bond,
         'target_stock_ratio': alloc_stock,
-        'max_rf_ratio': max_rf_ratio,
-        'time_horizon': time_horizon
+        'time_horizon': time_horizon,
+        'margin': margin
     }
 
     return (
-        best_portfolio, y_capped, capital_alloc,
-        sigma_c, expected_rc, weights, tickers,
-        portfolio_info, sigma_p, mu, y_opt, mu_p, cov
+        best_portfolio,
+        w_stock,
+        capital_alloc,
+        sigma_c,
+        expected_rc,
+        weights,
+        tickers,
+        portfolio_info,
+        sigma_p,
+        mu,
+        mu_p,
+        cov
     )
