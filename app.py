@@ -231,7 +231,7 @@ if run_analysis:
             st.success("Step G1 – Bond model parameters calculated.")
 
             # H. Construct complete portfolio considering cash/bond/stock allocation strategy
-            (best_portfolio, y_capped, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, sigma_p, mu, mu_p, cov, w_cash, y_opt) = block_h_complete_portfolio.run(
+            (best_portfolio, w_stock, capital_alloc, sigma_c, expected_rc, weights, tickers_portfolio, portfolio_info, sigma_p, mu, mu_p, cov, w_cash) = block_h_complete_portfolio.run(
                 hrp_result_dict,
                 adj_returns_combinations,
                 cov_matrix_dict,
@@ -244,8 +244,7 @@ if run_analysis:
                 alloc_stock=config.alloc_stock,
                 y_min=config.y_min,
                 y_max=config.y_max,
-                margin=0.03
-            )
+                margin=0.03)
             st.success("Step H – Final portfolio allocation with integrated strategy computed.")
 
             # H1. Summary of portfolio and expected utility
