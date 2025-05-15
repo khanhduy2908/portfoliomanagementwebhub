@@ -6,22 +6,20 @@ def optimize_allocation(
     target_alloc, margin=0.03
 ):
     """
-    Tối ưu tỷ trọng phân bổ (cash, bond, stock) thỏa ràng buộc target ± margin dưới dạng soft penalty.
+    Tối ưu tỷ trọng phân bổ (cash, bond, stock) với soft penalty để giữ tỷ lệ gần target ± margin.
     """
     weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
     weights_stock_i /= weights_stock_i.sum()
 
     def smooth_penalty(x, target, margin):
         diff = abs(x - target)
-        if diff <= margin:
-            return 0
-        else:
-            return 1000 * (diff - margin) ** 2
+        return 1000 * max(0, diff - margin) ** 2  # Quadratic penalty only if diff > margin
 
     def utility(x):
         w_cash, w_bond = x
         w_stock = 1 - w_cash - w_bond
 
+        # Bỏ qua nếu sai phạm phạm vi logic
         if (w_stock < 0) or (w_cash < 0) or (w_bond < 0) or (w_cash > 1) or (w_bond > 1):
             return 1e8
 
@@ -37,18 +35,22 @@ def optimize_allocation(
 
         return -u + penalty
 
+    # Constraint: weights sum to 1
     constraints = ({
         'type': 'eq',
         'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))
     })
 
+    # Bounds for cash and bond: [0, 1]
     bounds = [(0,1), (0,1)]
 
+    # Khởi tạo với giá trị gần target, giới hạn trong biên margin hợp lý
     initial_guess = [
         np.clip(target_alloc['cash'], margin, 1 - 2*margin),
         np.clip(target_alloc['bond'], margin, 1 - 2*margin)
     ]
 
+    # Optimize với SLSQP, fallback sang trust-constr nếu không thành công
     result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints, method='SLSQP', options={'ftol':1e-9, 'disp': False})
 
     if not result.success:
@@ -70,9 +72,8 @@ def optimize_allocation(
 
 def get_max_rf_ratio(risk_score, A, alloc_cash, alloc_bond, alloc_stock):
     """
-    Quy tắc ràng buộc tỷ lệ tối đa tiền mặt + trái phiếu theo khẩu vị rủi ro
+    Ràng buộc tỷ lệ tối đa tiền mặt + trái phiếu theo khẩu vị rủi ro.
     """
-    # Ràng buộc cứng theo risk_score
     if 10 <= risk_score <= 17:
         hard_cap = 0.40
     elif 18 <= risk_score <= 27:
@@ -82,7 +83,6 @@ def get_max_rf_ratio(risk_score, A, alloc_cash, alloc_bond, alloc_stock):
     else:
         hard_cap = 0.40  # fallback
 
-    # Ràng buộc đề xuất theo A (risk aversion)
     if A >= 25:
         suggested = 0.40
     elif A <= 2:
@@ -90,7 +90,7 @@ def get_max_rf_ratio(risk_score, A, alloc_cash, alloc_bond, alloc_stock):
     else:
         suggested = 0.02 + (A - 2) * ((0.40 - 0.02) / (25 - 2))
 
-    max_target_rf = alloc_cash + alloc_bond + 0.4 * alloc_stock  # giả định 40% cổ phiếu có thể chuyển thành rf
+    max_target_rf = alloc_cash + alloc_bond + 0.4 * alloc_stock  # giả định 40% cổ phiếu chuyển thành rf
 
     return min(hard_cap, suggested, max_target_rf)
 
@@ -105,6 +105,7 @@ def run(
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
 
+    # Lấy portfolio Sharpe ratio cao nhất
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
 
@@ -119,7 +120,7 @@ def run(
         'stock': alloc_stock
     }
 
-    # Tối ưu phân bổ
+    # Tối ưu phân bổ với penalty mềm
     w_cash, w_bond, w_stock, capital_cash, capital_bond, capital_stock, capital_alloc = optimize_allocation(
         best_portfolio, mu, cov, rf, A, total_capital,
         target_alloc, margin=margin
@@ -145,13 +146,11 @@ def run(
 
     utility = expected_rc - 0.5 * A * sigma_c ** 2
 
-    # Tính ràng buộc max risk-free ratio
+    # Ràng buộc max tỷ lệ risk-free
     max_rf_ratio = get_max_rf_ratio(risk_score, A, alloc_cash, alloc_bond, alloc_stock)
 
-    # Giới hạn tỷ lệ tiền mặt + trái phiếu không vượt quá max_rf_ratio
     capital_rf_total = capital_cash + capital_bond
     if capital_rf_total / total_capital > max_rf_ratio:
-        # Cắt giảm tỷ lệ tiền mặt/trái phiếu nếu vượt
         excess = capital_rf_total - max_rf_ratio * total_capital
         capital_rf_total = max_rf_ratio * total_capital
         capital_cash = max(capital_cash - excess * (alloc_cash / (alloc_cash + alloc_bond)), 0)
@@ -165,9 +164,9 @@ def run(
         w_bond = capital_bond / total_capital
         w_stock = capital_stock / total_capital
 
-    # Tính y_opt và y_capped (tỷ lệ rủi ro, cân đối tối ưu)
-    y_opt = w_stock  # Giả định tỷ lệ đầu tư vào tài sản rủi ro
-    y_capped = min(max(y_min, y_opt), y_max)  # Giới hạn trong [y_min, y_max]
+    # Tính y_opt và y_capped theo ràng buộc
+    y_opt = w_stock
+    y_capped = min(max(y_min, y_opt), y_max)
 
     portfolio_info = {
         'portfolio_name': '-'.join(best_key),
