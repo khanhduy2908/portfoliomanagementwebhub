@@ -41,7 +41,7 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         )
         fig.update_traces(textinfo='percent+label', textfont_size=14)
         fig.update_layout(
-            title_x=0.5,
+            title_x=0.5,  # Căn giữa tiêu đề
             plot_bgcolor='#1e1e1e',
             paper_bgcolor='#1e1e1e',
             font=dict(color='white', size=14),
