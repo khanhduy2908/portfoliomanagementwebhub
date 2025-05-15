@@ -6,7 +6,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 
 def run(data_stocks, benchmark_data, benchmark_symbol, portfolio_weights, tickers,
-        start_date, end_date):
+        start_date, end_date, rf):
 
     st.subheader("Portfolio Dynamics & Risk Analysis")
 
