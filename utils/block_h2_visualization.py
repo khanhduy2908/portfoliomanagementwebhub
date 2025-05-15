@@ -21,14 +21,14 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
-    # Chuẩn bị dữ liệu cho Pie Chart
+    # Prepare Pie Chart data
     pie_df = pd.DataFrame({
         'Asset Class / Ticker': labels,
         'Capital (VND)': sizes,
         'Allocation (%)': [v / total * 100 for v in sizes]
     })
 
-    # Layout 2 columns side-by-side (chart vs table)
+    # Two columns layout
     col1, col2 = st.columns([1.6, 1])
 
     with col1:
@@ -41,11 +41,12 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         )
         fig.update_traces(textinfo='percent+label', textfont_size=14)
         fig.update_layout(
-            title_x=0.5,  # Căn giữa tiêu đề
+            title_x=0.5,
+            title_y=0.95,
             plot_bgcolor='#1e1e1e',
             paper_bgcolor='#1e1e1e',
             font=dict(color='white', size=14),
-            margin=dict(t=60, b=20, l=20, r=20),
+            margin=dict(t=70, b=20, l=20, r=20),
             legend=dict(
                 orientation="v",
                 y=0.5,
@@ -75,7 +76,7 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         st.markdown("#### Allocation Table")
         st.dataframe(summary_df, use_container_width=True, height=410)
 
-    # --- Target vs Actual Allocation Comparison ---
+    # Target vs Actual Allocation Comparison
     st.markdown("#### Target vs Actual Allocation Comparison")
 
     target_allocation = allocation_matrix.get((risk_level, time_horizon), {
