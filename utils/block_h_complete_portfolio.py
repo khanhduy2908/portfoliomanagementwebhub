@@ -5,28 +5,17 @@ def optimize_allocation_cvxpy(
     best_portfolio, mu, cov, rf, A, total_capital,
     target_alloc, margin=0.03
 ):
-    """
-    Tối ưu phân bổ tài sản (cash, bond, stock) dùng cvxpy,
-    với ràng buộc allocation nằm trong target ± margin,
-    tối ưu utility = expected return - 0.5 * A * variance.
-    """
-
     weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
     weights_stock_i /= weights_stock_i.sum()
 
-    # Biến quyết định
     w_cash = cp.Variable()
     w_bond = cp.Variable()
     w_stock = cp.Variable()
 
-    # Tính kỳ vọng lợi nhuận và rủi ro
     expected_return = w_stock * mu @ weights_stock_i + (w_bond + w_cash) * rf
-    volatility = cp.sqrt(cp.quad_form(weights_stock_i * w_stock, cov))
+    variance = cp.quad_form(weights_stock_i * w_stock, cov)
+    utility = expected_return - 0.5 * A * variance
 
-    # Hàm mục tiêu utility
-    utility = expected_return - 0.5 * A * volatility ** 2
-
-    # Ràng buộc
     constraints = [
         w_cash + w_bond + w_stock == 1,
         w_cash >= max(0, target_alloc['cash'] - margin),
@@ -37,9 +26,7 @@ def optimize_allocation_cvxpy(
         w_stock <= min(1, target_alloc['stock'] + margin),
     ]
 
-    # Định nghĩa và giải bài toán tối ưu
     prob = cp.Problem(cp.Maximize(utility), constraints)
-
     prob.solve(solver=cp.SCS, verbose=False)
 
     if prob.status not in ["optimal", "optimal_inaccurate"]:
@@ -64,16 +51,9 @@ def run(
     y_min=0.6, y_max=0.9, time_horizon=None,
     margin=0.03
 ):
-    """
-    Block H: Tối ưu phân bổ hoàn chỉnh dùng cvxpy,
-    chặt chẽ với ràng buộc allocation ± margin,
-    đảm bảo hiệu quả và tính ổn định.
-    """
-
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
 
-    # Chọn portfolio có Sharpe Ratio cao nhất
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
 
@@ -88,7 +68,6 @@ def run(
         'stock': alloc_stock
     }
 
-    # Tối ưu allocation
     w_cash, w_bond, w_stock, capital_cash, capital_bond, capital_stock, capital_alloc = optimize_allocation_cvxpy(
         best_portfolio, mu, cov, rf, A, total_capital,
         target_alloc, margin=margin
