@@ -3,7 +3,7 @@ import plotly.express as px
 import streamlit as st
 
 def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_matrix: dict, risk_level: str, time_horizon: str):
-    st.subheader("Asset Allocation Overview")
+    st.subheader("Asset Allocation Overview (Plotly Enhanced)")
 
     if not capital_alloc or not tickers:
         st.warning("⚠️ Missing capital allocation or tickers.")
@@ -21,33 +21,35 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
+    # Pie Chart Data
     pie_df = pd.DataFrame({
-        'Category': labels,
-        'Capital': sizes,
+        'Asset Class / Ticker': labels,
+        'Capital (VND)': sizes,
         'Allocation (%)': [v / total * 100 for v in sizes]
     })
 
-    # --- Chart & Table side-by-side ---
-    col1, col2 = st.columns([2, 2])  # Even split for better alignment
+    # Layout 2 columns side-by-side (chart vs table)
+    col1, col2 = st.columns([1.4, 1.0])
 
     with col1:
         fig = px.pie(
             pie_df,
-            names='Category',
+            names='Asset Class / Ticker',
             values='Allocation (%)',
-            hole=0.35,
-            title=dict(text="Capital Allocation by Asset Class and Ticker", x=0.5, xanchor='center'),
-            color_discrete_sequence=px.colors.qualitative.Set3
+            hole=0.35
         )
         fig.update_traces(textinfo='percent+label', textfont_size=13)
         fig.update_layout(
+            title=dict(
+                text="Capital Allocation by Asset Class and Ticker",
+                x=0.5,
+                xanchor='center'
+            ),
             plot_bgcolor='#1e1e1e',
             paper_bgcolor='#1e1e1e',
             font_color='white',
-            title_x=0.5,
             margin=dict(t=40, b=20, l=10, r=10),
             legend=dict(
-                title='',
                 orientation="v",
                 y=0.5,
                 x=1.05,
@@ -61,12 +63,12 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         summary_df = pd.DataFrame({
             "Asset Class / Ticker": labels + ['Stock Total', 'Total'],
             "Capital (VND)": [f"{v:,.0f}" for v in sizes] + [f"{capital_stock:,.0f}", f"{total:,.0f}"],
-            "Allocation (%)": [f"{v / total * 100:.1f}%" for v in sizes] + [f"{capital_stock / total * 100:.1f}%", "100.0%"]
+            "Allocation (%)": [f"{v/total*100:.1f}%" for v in sizes] + [f"{capital_stock/total*100:.1f}%", "100.0%"]
         })
         st.markdown("#### Allocation Table")
-        st.dataframe(summary_df, use_container_width=True, height=400)
+        st.dataframe(summary_df, use_container_width=True, height=410)
 
-    # --- Target vs Actual ---
+    # --- Target vs Actual Allocation Comparison ---
     st.markdown("#### Target vs Actual Allocation Comparison")
 
     target_allocation = allocation_matrix.get((risk_level, time_horizon), {
@@ -98,6 +100,7 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
     ])
     st.dataframe(df_compare, use_container_width=True, height=250)
 
+    # Alert if deviation > 5%
     large_deviation = [
         k for k in ["Cash", "Bonds", "Stocks"]
         if abs(actual_ratios[k] - target_ratios[k]) > 0.05
