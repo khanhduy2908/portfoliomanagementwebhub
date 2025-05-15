@@ -6,69 +6,73 @@ def optimize_allocation(
     target_alloc, margin=0.03
 ):
     """
-    Tối ưu tỷ trọng phân bổ (cash, bond, stock) thỏa ràng buộc target ± margin dưới dạng soft penalty.
-    Tránh lỗi ràng buộc cứng bằng phương pháp penalty hàm mục tiêu.
+    Optimize allocation weights (cash, bond, stock) with soft penalty constraints
+    to keep allocations within target ± margin, avoid hard constraints failure.
     """
 
+    # Weights in risky assets (stocks) normalized
     weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
     weights_stock_i /= weights_stock_i.sum()
 
     def smooth_penalty(x, target, margin):
         diff = abs(x - target)
-        if diff <= margin:
-            return 0
-        else:
-            # penalty quadratic bắt đầu từ margin, số lớn để ưu tiên ràng buộc
-            return 1000 * (diff - margin) ** 2
+        return 0 if diff <= margin else 1000 * (diff - margin) ** 2
 
     def utility(x):
         w_cash, w_bond = x
         w_stock = 1 - w_cash - w_bond
 
-        # Giới hạn cơ bản để tránh out-of-bound
+        # Boundaries soft enforcement
         if (w_stock < 0) or (w_cash < 0) or (w_bond < 0) or (w_cash > 1) or (w_bond > 1):
-            return 1e8
+            return 1e8  # heavy penalty
 
         expected_return = w_stock * np.dot(weights_stock_i, mu) + (w_bond + w_cash) * rf
         volatility = np.sqrt(weights_stock_i.T @ cov @ weights_stock_i) * w_stock
-        u = expected_return - 0.5 * A * volatility ** 2
+        utility_val = expected_return - 0.5 * A * volatility ** 2
 
-        # Phạt lệch allocation vượt margin
         penalty = (
             smooth_penalty(w_cash, target_alloc['cash'], margin) +
             smooth_penalty(w_bond, target_alloc['bond'], margin) +
             smooth_penalty(w_stock, target_alloc['stock'], margin)
         )
 
-        # Mục tiêu tối ưu: maximize utility - penalty → minimize negative utility + penalty
-        return -u + penalty
+        return -utility_val + penalty
 
-    # Ràng buộc tổng tỷ trọng = 1
+    # Constraint: sum allocations == 1
     constraints = ({
         'type': 'eq',
         'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))
     })
 
-    # Bounds cho cash và bond trong [0,1]
-    bounds = [(0,1), (0,1)]
+    bounds = [(0, 1), (0, 1)]
 
-    # Điểm khởi đầu gần target allocation trong bounds hợp lý
+    # Start near target allocations but within safe bounds
     initial_guess = [
         np.clip(target_alloc['cash'], margin, 1 - 2*margin),
         np.clip(target_alloc['bond'], margin, 1 - 2*margin)
     ]
 
-    # Tối ưu bằng SLSQP, fallback trust-constr nếu không thành công
-    result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints, method='SLSQP', options={'ftol':1e-9, 'disp': False})
+    # Try SLSQP method first
+    result = minimize(
+        utility, x0=initial_guess, bounds=bounds,
+        constraints=constraints, method='SLSQP',
+        options={'ftol':1e-9, 'disp': False}
+    )
 
+    # Fallback to trust-constr if SLSQP fails
     if not result.success:
-        result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints, method='trust-constr', options={'xtol':1e-9, 'disp': False})
+        result = minimize(
+            utility, x0=initial_guess, bounds=bounds,
+            constraints=constraints, method='trust-constr',
+            options={'xtol':1e-9, 'disp': False}
+        )
         if not result.success:
             raise ValueError(f"Optimization failed: {result.message}")
 
     w_cash_opt, w_bond_opt = result.x
     w_stock_opt = 1 - w_cash_opt - w_bond_opt
 
+    # Compute capital allocations
     capital_cash = w_cash_opt * total_capital
     capital_bond = w_bond_opt * total_capital
     capital_stock = w_stock_opt * total_capital
@@ -76,7 +80,6 @@ def optimize_allocation(
     capital_alloc = {t: w_stock_opt * total_capital * w for t, w in best_portfolio['Weights'].items()}
 
     return w_cash_opt, w_bond_opt, w_stock_opt, capital_cash, capital_bond, capital_stock, capital_alloc
-
 
 def run(
     hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
@@ -86,15 +89,14 @@ def run(
     margin=0.03
 ):
     """
-    Block H: Tối ưu hoàn chỉnh danh mục với ràng buộc allocation mềm ±margin,
-    đảm bảo tỷ trọng phù hợp với chiến lược rủi ro khách hàng,
-    tránh lỗi tối ưu và đảm bảo tính nhất quán.
+    Block H: Complete portfolio construction with soft allocation constraints,
+    ensuring risk profile adherence and avoiding optimization failures.
     """
 
     if not hrp_result_dict:
         raise ValueError("❌ No valid HRP-CVaR portfolios found.")
 
-    # Chọn portfolio tốt nhất theo Sharpe Ratio
+    # Select best portfolio by Sharpe ratio
     best_key = max(hrp_result_dict, key=lambda k: hrp_result_dict[k]['Sharpe Ratio'])
     best_portfolio = hrp_result_dict[best_key]
 
@@ -109,7 +111,7 @@ def run(
         'stock': alloc_stock
     }
 
-    # Gọi hàm tối ưu allocation
+    # Optimize allocation weights with soft margin constraints
     w_cash, w_bond, w_stock, capital_cash, capital_bond, capital_stock, capital_alloc = optimize_allocation(
         best_portfolio, mu, cov, rf, A, total_capital,
         target_alloc, margin=margin
@@ -134,8 +136,9 @@ def run(
 
     utility = expected_rc - 0.5 * A * sigma_c ** 2
 
-    # Tính max_rf_ratio (giới hạn tối đa vốn không rủi ro)
-    max_rf_ratio = alloc_cash + alloc_bond
+    # Calculate optimal risky exposure y_opt and clip to [y_min, y_max]
+    y_opt = w_stock
+    y_capped = np.clip(y_opt, y_min, y_max)
 
     portfolio_info = {
         'portfolio_name': '-'.join(best_key),
@@ -163,9 +166,8 @@ def run(
         'target_stock_ratio': alloc_stock,
         'time_horizon': time_horizon,
         'margin': margin,
-        'y_opt': w_stock,     # Trả về y_opt để block h1 dùng
-        'y_capped': w_stock,  # Trả về y_capped (bằng y_opt ở đây)
-        'max_rf_ratio': max_rf_ratio
+        'y_opt': y_opt,
+        'y_capped': y_capped
     }
 
     return (
@@ -181,5 +183,7 @@ def run(
         mu,
         mu_p,
         cov,
-        w_cash
+        w_cash,
+        y_opt,
+        y_capped
     )
