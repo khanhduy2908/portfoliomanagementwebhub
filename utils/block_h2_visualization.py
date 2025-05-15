@@ -1,8 +1,8 @@
-# utils/block_h2_visualization.py
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from matplotlib.colors import Normalize
+import matplotlib.cm as cm
 
 def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_matrix: dict, risk_level: str, time_horizon: str):
     st.subheader("Asset Allocation Overview (Plotly Enhanced)")
@@ -23,23 +23,23 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
         st.error("⚠️ Total capital is zero. Cannot compute allocation.")
         return
 
-    # Pie Chart Data
     pie_df = pd.DataFrame({
-        'Asset Class / Ticker': labels,
-        'Capital (VND)': sizes,
+        'Category': labels,
+        'Capital': sizes,
         'Allocation (%)': [v / total * 100 for v in sizes]
     })
 
-    # Big Chart + Compact Table
-    col1, col2 = st.columns([3, 1])  # Widen chart column
+    # Biểu đồ + Bảng chia theo tỷ lệ 1.3:1 để không bị chiếm hết không gian
+    col1, col2 = st.columns([1.3, 1])
 
     with col1:
         fig = px.pie(
             pie_df,
-            names='Asset Class / Ticker',
+            names='Category',
             values='Allocation (%)',
             hole=0.35,
-            title="Capital Allocation by Asset Class and Ticker"
+            title="Capital Allocation by Asset Class and Ticker",
+            color_discrete_sequence=px.colors.qualitative.Set3
         )
         fig.update_traces(textinfo='percent+label', textfont_size=13)
         fig.update_layout(
@@ -47,16 +47,17 @@ def run(portfolio_info: dict, capital_alloc: dict, tickers: list, allocation_mat
             paper_bgcolor='#1e1e1e',
             font_color='white',
             title_x=0.5,
+            height=420,
             margin=dict(t=40, b=30),
-            legend=dict(orientation="h", y=-0.2)
+            legend=dict(orientation="h", y=-0.15)
         )
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
         summary_df = pd.DataFrame({
-            "Ticker": labels + ['Stock Total', 'Total'],
+            "Asset Class / Ticker": labels + ['Stock Total', 'Total'],
             "Capital (VND)": [f"{v:,.0f}" for v in sizes] + [f"{capital_stock:,.0f}", f"{total:,.0f}"],
-            "Alloc (%)": [f"{v/total*100:.1f}%" for v in sizes] + [f"{capital_stock/total*100:.1f}%", "100.0%"]
+            "Allocation (%)": [f"{v/total*100:.1f}%" for v in sizes] + [f"{capital_stock/total*100:.1f}%", "100.0%"]
         })
         st.markdown("#### Allocation Table")
         st.dataframe(summary_df, use_container_width=True, height=400)
