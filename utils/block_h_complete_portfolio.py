@@ -1,5 +1,20 @@
 import numpy as np
-from scipy.optimize import minimize_scalar, minimize
+from scipy.optimize import minimize
+
+def optimize_y_opt(mu_p, sigma_p, rf, A, y_min, y_max):
+    """
+    Tối ưu tỷ lệ rủi ro y trên CAL line: max U = E[r_p] - 0.5 * A * var[r_p]
+    với r_p = y * risky + (1-y) * rf
+    """
+    def neg_utility(y):
+        expected_return = y * mu_p + (1 - y) * rf
+        volatility = y * sigma_p
+        return -(expected_return - 0.5 * A * volatility**2)
+
+    res = minimize(neg_utility, x0=(y_min + y_max) / 2, bounds=[(y_min, y_max)], method='bounded')
+    if not res.success:
+        raise ValueError(f"Optimization for y_opt failed: {res.message}")
+    return res.x[0]
 
 def optimize_allocation(
     best_portfolio, mu, cov, rf, A, total_capital,
@@ -62,31 +77,8 @@ def optimize_allocation(
 
     capital_alloc = {t: w_stock_opt * total_capital * w for t, w in best_portfolio['Weights'].items()}
 
-    return (
-        w_cash_opt,
-        w_bond_opt,
-        w_stock_opt,
-        capital_cash,
-        capital_bond,
-        capital_stock,
-        capital_alloc
-    )
+    return w_cash_opt, w_bond_opt, w_stock_opt, capital_cash, capital_bond, capital_stock, capital_alloc
 
-
-def optimize_y_opt(mu_p, sigma_p, rf, A, y_min=0.6, y_max=0.9):
-    """
-    Tối ưu y_opt (tỷ trọng rủi ro chưa giới hạn) trên CAL
-    """
-    def neg_utility(y):
-        expected_return = y * mu_p + (1 - y) * rf
-        volatility = y * sigma_p
-        return -(expected_return - 0.5 * A * volatility ** 2)
-
-    res = minimize_scalar(neg_utility, bounds=(y_min, y_max), method='bounded', options={'xatol':1e-6})
-    if not res.success:
-        raise ValueError(f"Optimization of y_opt failed: {res.message}")
-
-    return res.x
 
 def run(
     hrp_result_dict, adj_returns_combinations, cov_matrix_dict,
@@ -163,12 +155,11 @@ def run(
         'y_opt': y_opt
     }
 
-    # Trả về w_stock dưới tên y_capped để app không bị lỗi
     y_capped = w_stock
 
     return (
         best_portfolio,
-        y_capped,          # Tỷ lệ cuối cùng sử dụng (đã tối ưu allocation)
+        y_capped,        # y cuối dùng để phân bổ (đã tối ưu allocation)
         capital_alloc,
         sigma_c,
         expected_rc,
@@ -180,5 +171,5 @@ def run(
         mu_p,
         cov,
         w_cash,
-        y_opt              # Tỷ lệ tối ưu chưa giới hạn
+        y_opt             # y tối ưu chưa giới hạn
     )
