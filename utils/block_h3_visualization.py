@@ -10,37 +10,39 @@ def run(
 ):
     st.subheader("Efficient Frontier with Optimal Complete Portfolio")
 
+    # --- Step 0: Validate inputs ---
     try:
         best_key = list(best_portfolio.keys())[0]
         tickers = list(best_key)
         result = best_portfolio[best_key]
         weights = np.array([result['Weights'][t] for t in tickers])
     except Exception as e:
-        st.error(f"❌ Failed to extract best portfolio: {e}")
+        st.error(f"❌ Failed to extract best portfolio info: {e}")
         return
 
-    # Step 1: Retrieve mu and cov with fallback
+    # --- Step 1: Obtain realistic mu and covariance matrix ---
     if adj_returns_combinations and cov_matrix_dict:
         try:
             mu_dict = adj_returns_combinations.get(best_key)
             cov_df = cov_matrix_dict.get(best_key)
             if mu_dict is None or cov_df is None:
-                raise ValueError("Missing mu or covariance data.")
+                raise ValueError("Missing mu or covariance data for best portfolio key.")
             mu_realistic = np.array([mu_dict[t] for t in tickers]) / 100
             cov = cov_df.loc[tickers, tickers].values
         except Exception as e:
-            st.warning(f"⚠️ Fallback to flat mu/cov due to error: {e}")
+            st.warning(f"⚠️ Using fallback mu/cov due to error: {e}")
             mu_realistic = np.full(len(tickers), result.get('Expected Return (%)', 0) / 100)
             cov = np.outer(weights, weights) * (result.get('Volatility (%)', 0) / 100) ** 2
     else:
         mu_realistic = np.full(len(tickers), result.get('Expected Return (%)', 0) / 100)
         cov = np.outer(weights, weights) * (result.get('Volatility (%)', 0) / 100) ** 2
 
-    # Step 2: Simulate Efficient Frontier portfolios for smooth curve
+    # --- Step 2: Simulate Efficient Frontier portfolios for smooth gradient ---
     if simulate_for_visual:
         np.random.seed(42)
         n_simulations = 20000
         weights_sim = np.random.dirichlet(np.ones(len(tickers)), size=n_simulations)
+
         mu_sim = weights_sim @ mu_realistic
         sigma_sim = np.sqrt(np.einsum('ij,jk,ik->i', weights_sim, cov, weights_sim))
         sharpe_sim = (mu_sim - rf) / sigma_sim
@@ -56,7 +58,7 @@ def run(
     else:
         df_sim = pd.DataFrame(columns=['Volatility (%)', 'Expected Return (%)', 'Sharpe Ratio'])
 
-    # Step 3: Plotly scatter plot with color gradient by Sharpe Ratio
+    # --- Step 3: Create Plotly scatter plot ---
     fig = px.scatter(
         df_sim,
         x='Volatility (%)',
@@ -64,10 +66,11 @@ def run(
         color='Sharpe Ratio',
         color_continuous_scale='plasma',
         opacity=0.85,
+        hover_data={'Volatility (%)': ':.2f', 'Expected Return (%)': ':.2f', 'Sharpe Ratio': ':.2f'},
         title="Efficient Frontier with Optimal Complete Portfolio"
     )
 
-    # Add Risk-Free Rate point
+    # --- Step 4: Add key portfolio points ---
     fig.add_trace(go.Scatter(
         x=[0],
         y=[rf * 100],
@@ -75,10 +78,10 @@ def run(
         name=f"Risk-Free Rate ({rf*100:.2f}%)",
         marker=dict(color='deepskyblue', size=14),
         text=["Risk-Free"],
-        textposition="bottom right"
+        textposition="bottom right",
+        hovertemplate="Risk-Free Rate: %{y:.2f}%<extra></extra>"
     ))
 
-    # Add Optimal Risky Portfolio point
     fig.add_trace(go.Scatter(
         x=[sigma_p * 100],
         y=[mu_p * 100],
@@ -86,10 +89,10 @@ def run(
         name=f"Optimal Risky Portfolio ({', '.join(tickers)})",
         marker=dict(color='red', size=16, symbol='star'),
         text=["Optimal Risky"],
-        textposition="top center"
+        textposition="top center",
+        hovertemplate="Optimal Risky Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
     ))
 
-    # Add Optimal Complete Portfolio point
     fig.add_trace(go.Scatter(
         x=[sigma_c * 100],
         y=[expected_rc * 100],
@@ -97,10 +100,11 @@ def run(
         name=f"Optimal Complete Portfolio (y={y_capped:.2f})",
         marker=dict(color='lime', size=16, symbol='diamond'),
         text=["Complete Portfolio"],
-        textposition="top center"
+        textposition="top center",
+        hovertemplate="Complete Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
     ))
 
-    # Add Leveraged Portfolio if different from capped
+    # Leveraged portfolio if y_opt differs significantly from y_capped
     if abs(y_opt - y_capped) > 0.01:
         sigma_leverage = y_opt * sigma_p
         rc_leverage = y_opt * mu_p + (1 - y_opt) * rf
@@ -111,10 +115,11 @@ def run(
             name=f"Leveraged Portfolio (y={y_opt:.2f})",
             marker=dict(color='magenta', size=16, symbol='x'),
             text=["Leveraged"],
-            textposition="top center"
+            textposition="top center",
+            hovertemplate="Leveraged Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
         ))
 
-    # Add Capital Allocation Line (CAL)
+    # --- Step 5: Add Capital Allocation Line (CAL) ---
     slope = (mu_p - rf) / sigma_p if sigma_p > 0 else 0
     max_sigma = df_sim['Volatility (%)'].max() if not df_sim.empty else sigma_p * 150
     x_line = np.linspace(0, max_sigma * 1.1, 300)
@@ -125,19 +130,22 @@ def run(
         y=y_line,
         mode='lines',
         name="Capital Allocation Line (CAL)",
-        line=dict(color='red', dash='dash', width=2)
+        line=dict(color='red', dash='dash', width=2),
+        hovertemplate=None
     ))
 
-    # Final layout adjustments for dark theme
+    # --- Step 6: Final layout updates ---
     fig.update_layout(
         height=650,
         plot_bgcolor='#1e1e1e',
         paper_bgcolor='#1e1e1e',
         font=dict(color='white'),
         title_x=0.5,
-        legend=dict(bgcolor='#1e1e1e', font=dict(color='white'))
+        legend=dict(bgcolor='#1e1e1e', font=dict(color='white')),
+        margin=dict(t=60, b=40, l=60, r=40)
     )
-    fig.update_xaxes(title='Volatility (%)', color='white')
-    fig.update_yaxes(title='Expected Return (%)', color='white')
+
+    fig.update_xaxes(title='Volatility (%)', color='white', showgrid=True, gridcolor='gray', zerolinecolor='gray')
+    fig.update_yaxes(title='Expected Return (%)', color='white', showgrid=True, gridcolor='gray', zerolinecolor='gray')
 
     st.plotly_chart(fig, use_container_width=True)
