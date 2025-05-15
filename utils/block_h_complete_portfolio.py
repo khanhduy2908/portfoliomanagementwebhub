@@ -5,36 +5,39 @@ def optimize_allocation(
     best_portfolio, mu, cov, rf, A, total_capital,
     target_alloc, margin=0.03
 ):
-    """
-    Tối ưu tỷ trọng phân bổ (cash, bond, stock) thỏa ràng buộc target ± margin.
-    Trả về: w_cash, w_bond, w_stock, capital_alloc (theo từng cổ phiếu).
-    """
     weights_stock_i = np.array([best_portfolio['Weights'][t] for t in best_portfolio['Weights']])
     weights_stock_i /= weights_stock_i.sum()
+
+    def smooth_penalty(x, target, margin):
+        diff = abs(x - target)
+        if diff <= margin:
+            return 0
+        else:
+            # penalty quadratic bắt đầu từ margin
+            return 1000 * (diff - margin) ** 2
 
     def utility(x):
         w_cash, w_bond = x
         w_stock = 1 - w_cash - w_bond
-        # Ràng buộc giới hạn biên độ và tổng phải = 1
+
+        # Ràng buộc giới hạn biên dưới và trên (soft penalty)
         if (w_stock < 0) or (w_cash < 0) or (w_bond < 0) or (w_cash > 1) or (w_bond > 1):
-            return 1e6  # penalty nếu vượt giới hạn
+            return 1e6
 
         expected_return = w_stock * np.dot(weights_stock_i, mu) + (w_bond + w_cash) * rf
         volatility = np.sqrt(weights_stock_i.T @ cov @ weights_stock_i) * w_stock
         u = expected_return - 0.5 * A * volatility ** 2
 
-        # Penalty cho sai lệch allocation vượt margin
-        penalty = 0
-        penalty += 1000 * max(0, abs(w_cash - target_alloc['cash']) - margin) ** 2
-        penalty += 1000 * max(0, abs(w_bond - target_alloc['bond']) - margin) ** 2
-        penalty += 1000 * max(0, abs(w_stock - target_alloc['stock']) - margin) ** 2
+        # Penalty smooth
+        penalty = (
+            smooth_penalty(w_cash, target_alloc['cash'], margin) +
+            smooth_penalty(w_bond, target_alloc['bond'], margin) +
+            smooth_penalty(w_stock, target_alloc['stock'], margin)
+        )
 
-        return -u + penalty  # minimize negative utility + penalty
+        return -u + penalty
 
-    bounds = [
-        (max(0, target_alloc['cash'] - margin), min(1, target_alloc['cash'] + margin)),
-        (max(0, target_alloc['bond'] - margin), min(1, target_alloc['bond'] + margin))
-    ]
+    bounds = [(0,1), (0,1)]
 
     # Constraint tổng = 1
     constraints = ({
@@ -42,11 +45,19 @@ def optimize_allocation(
         'fun': lambda x: 1 - (x[0] + x[1] + (1 - x[0] - x[1]))
     })
 
-    initial_guess = [target_alloc['cash'], target_alloc['bond']]
-    result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints)
+    # Khởi tạo điểm start nằm giữa biên bounds và target
+    initial_guess = [
+        min(max(target_alloc['cash'], margin), 1 - 2*margin),
+        min(max(target_alloc['bond'], margin), 1 - 2*margin)
+    ]
+
+    result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints, method='SLSQP')
 
     if not result.success:
-        raise ValueError(f"Optimization failed: {result.message}")
+        # thử phương pháp khác
+        result = minimize(utility, x0=initial_guess, bounds=bounds, constraints=constraints, method='trust-constr')
+        if not result.success:
+            raise ValueError(f"Optimization failed: {result.message}")
 
     w_cash_opt, w_bond_opt = result.x
     w_stock_opt = 1 - w_cash_opt - w_bond_opt
