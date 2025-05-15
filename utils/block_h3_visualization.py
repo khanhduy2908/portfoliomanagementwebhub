@@ -66,7 +66,6 @@ def run(
         title="Efficient Frontier with Optimal Complete Portfolio"
     )
 
-    # Risk-Free Rate
     fig.add_trace(go.Scatter(
         x=[0],
         y=[rf * 100],
@@ -78,7 +77,6 @@ def run(
         hovertemplate="Risk-Free Rate: %{y:.2f}%<extra></extra>"
     ))
 
-    # Optimal Risky Portfolio
     fig.add_trace(go.Scatter(
         x=[sigma_p * 100],
         y=[mu_p * 100],
@@ -90,7 +88,6 @@ def run(
         hovertemplate="Optimal Risky Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
     ))
 
-    # Optimal Complete Portfolio
     fig.add_trace(go.Scatter(
         x=[sigma_c * 100],
         y=[expected_rc * 100],
@@ -102,7 +99,6 @@ def run(
         hovertemplate="Complete Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
     ))
 
-    # Leveraged Portfolio if applicable
     if abs(y_opt - y_capped) > 0.01:
         sigma_leverage = y_opt * sigma_p
         rc_leverage = y_opt * mu_p + (1 - y_opt) * rf
@@ -117,7 +113,6 @@ def run(
             hovertemplate="Leveraged Portfolio:<br>Volatility: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>"
         ))
 
-    # Capital Allocation Line (CAL)
     slope = (mu_p - rf) / sigma_p if sigma_p > 0 else 0
     max_sigma = df_sim['Volatility (%)'].max() if not df_sim.empty else sigma_p * 150
     x_line = np.linspace(0, max_sigma * 1.1, 300)
@@ -138,7 +133,8 @@ def run(
         paper_bgcolor='#1e1e1e',
         font=dict(color='white'),
         title_x=0.5,
-        title_y=0.95,
+        title_y=0.98,
+        title_font=dict(size=20, family='Arial, sans-serif', color='white'),
         legend=dict(
             bgcolor='#1e1e1e',
             font=dict(color='white'),
@@ -147,7 +143,7 @@ def run(
             xanchor='left',
             x=0.02
         ),
-        margin=dict(t=70, b=40, l=60, r=40)
+        margin=dict(t=80, b=40, l=60, r=40)
     )
 
     fig.update_xaxes(title='Volatility (%)', color='white', showgrid=False)
