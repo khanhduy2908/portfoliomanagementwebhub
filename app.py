@@ -59,7 +59,7 @@ st.sidebar.header("1. Investment Universe")
 tickers_user = st.sidebar.multiselect(
     "Select Stocks for Portfolio Construction",
     options=valid_tickers,
-    default=["HAH", "TCB", "DGC", "MWG", "POW"]
+    default=["HAH", "TCB", "DGC", "MSH", "BAF"]
 )
 
 benchmark_user = st.sidebar.selectbox(
