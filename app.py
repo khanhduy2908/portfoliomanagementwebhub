@@ -22,27 +22,6 @@ from utils import (
     block_j_stress_testing
 )
 
-# --- Helper functions ---
-def map_risk_score_to_A(score):
-    if 10 <= score <= 17:
-        return 25 - (score - 10) * (10 / 7)
-    elif 18 <= score <= 27:
-        return 15 - (score - 18) * (10 / 9)
-    elif 28 <= score <= 40:
-        return 5 - (score - 28) * (4 / 12)
-    else:
-        raise ValueError("Risk score must be between 10 and 40.")
-
-def get_risk_profile_description(score):
-    if 10 <= score <= 17:
-        return "Very Conservative – Capital Preservation Focus"
-    elif 18 <= score <= 27:
-        return "Moderate – Balanced Growth and Preservation"
-    elif 28 <= score <= 40:
-        return "Aggressive – Growth Focused"
-    else:
-        return "Undefined"
-
 # Load valid tickers
 with open("utils/valid_tickers.txt", "r") as f:
     valid_tickers = sorted([line.strip() for line in f if line.strip()])
@@ -82,13 +61,11 @@ st.sidebar.header("2. Risk Profile and Investment Horizon")
 # Risk score selection
 risk_score_user = st.sidebar.slider("Risk Tolerance Score (10: Conservative, 40: Aggressive)", 10, 40, 25)
 
-# Map to risk aversion coefficient A
 def map_risk_score_to_A(score):
     if 10 <= score <= 40:
         return 2 + (score - 10) * (3 / 30)
     else:
         raise ValueError("Risk score must be between 10 and 40.")
-
 A_user = map_risk_score_to_A(risk_score_user)
 
 # Risk level categories
