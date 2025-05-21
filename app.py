@@ -56,19 +56,19 @@ rf_user = st.sidebar.number_input("Annual Risk-Free Rate (%)", value=9.0) / 100
 # ================================
 # Section 2: Risk Profile & Horizon
 # ================================
+# --- Risk Profile Section ---
 st.sidebar.header("2. Risk Profile and Investment Horizon")
 
-# Risk score selection
+# Risk score slider
 risk_score_user = st.sidebar.slider("Risk Tolerance Score (10: Conservative, 40: Aggressive)", 10, 40, 25)
 
+# Map score to risk aversion coefficient A
 def map_risk_score_to_A(score):
-    if 10 <= score <= 40:
-        return 2 + (score - 10) * (3 / 30)
-    else:
-        raise ValueError("Risk score must be between 10 and 40.")
+    return 2 + (score - 10) * (3 / 30)
+
 A_user = map_risk_score_to_A(risk_score_user)
 
-# Risk level categories
+# Map score to qualitative level + description
 if risk_score_user <= 17:
     risk_level = "Lower"
     risk_description = "Very Conservative – Focused on capital preservation, minimal tolerance for loss."
@@ -79,10 +79,10 @@ else:
     risk_level = "Higher"
     risk_description = "Aggressive – Growth-oriented with high risk tolerance and long-term horizon."
 
-# Time horizon selection
+# Time horizon input
 time_horizon_input = st.sidebar.selectbox("Investment Horizon", ["3–5 years", "6–10 years", "11+ years"])
 
-# Strategy mapping
+# Strategy allocation matrix
 allocation_matrix = {
     ("Lower", "3–5 years"): {"cash": 1.00, "bond": 0.00, "stock": 0.00, "strategy": "All Cash"},
     ("Lower", "6–10 years"): {"cash": 0.30, "bond": 0.50, "stock": 0.20, "strategy": "Strategy 1"},
@@ -99,7 +99,7 @@ allocation = allocation_matrix.get((risk_level, time_horizon_input), {
     "cash": 0.2, "bond": 0.4, "stock": 0.4, "strategy": "Default"
 })
 
-# Adjusted allocation based on A
+# Dynamic adjustment based on A
 base_cash = allocation['cash']
 base_bond = allocation['bond']
 base_stock = allocation['stock']
@@ -109,19 +109,16 @@ alloc_stock = base_stock * (1 - 0.4 * alpha)
 alloc_cash = base_cash + base_stock * 0.4 * alpha * 0.5
 alloc_bond = 1.0 - alloc_cash - alloc_stock
 
-# Display results
-st.sidebar.markdown(f"**User Risk Profile:** `{risk_level}`")
-st.sidebar.markdown(f"<span style='font-size:13px; color:gray'>{risk_description}</span>", unsafe_allow_html=True)
+# --- Display results ---
+st.sidebar.markdown(f"**Mapped Strategy:** {allocation['strategy']}")
+st.sidebar.markdown(f"**User Risk Profile:** {risk_level}")
+st.sidebar.markdown(f"<div style='font-size:13px; color:gray'>{risk_description}</div>", unsafe_allow_html=True)
+st.sidebar.markdown(f"**A Score = {A_user:.2f}**")
 
-st.sidebar.markdown(f"**Target Allocation**")
+st.sidebar.markdown("**Target Allocation**")
 st.sidebar.markdown(f"- Cash: {allocation['cash']*100:.0f}%")
 st.sidebar.markdown(f"- Bonds: {allocation['bond']*100:.0f}%")
 st.sidebar.markdown(f"- Stocks: {allocation['stock']*100:.0f}%")
-
-st.sidebar.markdown(f"**Adjusted Allocation Based on A = {A_user:.2f}**")
-st.sidebar.markdown(f"- Cash: {alloc_cash*100:.1f}%")
-st.sidebar.markdown(f"- Bonds: {alloc_bond*100:.1f}%")
-st.sidebar.markdown(f"- Stocks: {alloc_stock*100:.1f}%")
 
 # ================================
 # Section 3: Bond Investment Input
