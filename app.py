@@ -110,10 +110,9 @@ alloc_cash = base_cash + base_stock * 0.4 * alpha * 0.5
 alloc_bond = 1.0 - alloc_cash - alloc_stock
 
 # --- Display results ---
-st.sidebar.markdown(f"**Mapped Strategy:** {allocation['strategy']}")
-st.sidebar.markdown(f"**User Risk Profile:** {risk_level}")
-st.sidebar.markdown(f"<div style='font-size:13px; color:gray'>{risk_description}</div>", unsafe_allow_html=True)
 st.sidebar.markdown(f"**A Score = {A_user:.2f}**")
+st.sidebar.markdown(f"**User Risk Profile:** {risk_level}")
+st.sidebar.markdown(f"<div style='font-size:13px; color:white'>{risk_description}</div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("**Target Allocation**")
 st.sidebar.markdown(f"- Cash: {allocation['cash']*100:.0f}%")
