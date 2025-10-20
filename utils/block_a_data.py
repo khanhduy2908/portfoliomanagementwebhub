@@ -14,9 +14,9 @@ def run(tickers, benchmark_symbol, start_date, end_date):
         df_first.drop(columns='Month', inplace=True)
         return df_first
 
-    def get_stock_data(ticker):
+    def get_stock_data(ticker, source):
         try:
-            stock = Vnstock().stock(symbol=ticker, source='VCI')
+            stock = Vnstock().stock(symbol=ticker, source="TCBS" )
             df = stock.quote.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
 
             if df.empty:
